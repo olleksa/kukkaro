@@ -189,7 +189,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
 
 <header class="top">
   <div class="wrap topbar">
-    <div class="brand"><b>Kukkaro</b><span id="acct" title="Version 7.2, built 11.11.2026 17:32">household money · v7.2 · 261111.1732</span></div>
+    <div class="brand"><b>Kukkaro</b><span id="acct" title="Version 7.3, built 11.11.2026 17:56">household money · v7.3 · 261111.1756</span></div>
     <div class="period">
       <label class="muted" for="period">Period</label>
       <select id="period">
@@ -630,10 +630,12 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     (_b = S.cfg).rules || (_b.rules = []);
     (_c = S.cfg).categories || (_c.categories = []);
     migrate();
+    const cd0 = cleanDuplicates();
     clearTimeout(slow);
     S.loaded = true;
     setSaveState(S.store === "db" ? "Saved" : S.store === "local" ? "Saving in this browser only" : "Not saved (preview)");
     render();
+    if (cd0.removed || cd0.merged) toast("Cleaned up: ".concat(cd0.removed, " duplicate transaction").concat(cd0.removed === 1 ? "" : "s", " removed").concat(cd0.merged ? ", ".concat(cd0.merged, " repeated account").concat(cd0.merged === 1 ? "" : "s", " merged") : ""));
   }
   let D = null;
   function derive() {
@@ -1527,7 +1529,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     }).join(""), '\n  </div><p class="muted" style="font-size:12px">Remove takes out that file\'s transactions, so you can import it again.</p></details>');
   }
   function accountsEditor() {
-    return '<details id="d-accts" '.concat(S.open["d-accts"] ? "open" : "", "><summary>Accounts and people (").concat(S.cfg.accounts.length, ')</summary>\n    <p class="muted">Money moved between accounts listed here is not counted as spending or income. Add your family members\' accounts by importing their statements.</p>\n    <div style="display:grid;gap:8px">\n    ').concat(S.cfg.accounts.map((a) => '<div class="catrow" style="grid-template-columns:1fr">\n      <div class="formgrid">\n        <label>Name<input type="text" value="'.concat(esc(a.name), '" data-acctname="').concat(esc(a.id), '" id="an-').concat(esc(a.id), '"></label>\n        <label>Whose<input type="text" value="').concat(esc(a.person), '" data-acctperson="').concat(esc(a.id), '" id="ap-').concat(esc(a.id), '"></label>\n        <label>Type<select data-acctkind="').concat(esc(a.id), '">').concat(Object.entries(KIND_NAME).map(([k, n]) => '<option value="'.concat(k, '" ').concat(k === a.kind ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select></label>\n        <label>Account / card number<input type="text" value="').concat(esc(a.iban), '" data-acctiban="').concat(esc(a.id), '" id="ai-').concat(esc(a.id), '" placeholder="FI.."></label>\n      </div>\n      <div class="row"><span class="muted num">').concat(D.all.filter((t) => t.acct === a.id).length, " transactions</span>").concat(a.kind === "card" ? ' <button class="btn small" data-flipacct="'.concat(esc(a.id), '">Flip + / \u2212</button>') : "", ' <button class="btn small" data-delacct="').concat(esc(a.id), '">').concat(S.confirm === a.id ? "Tap again: delete account and its transactions" : "Delete account", "</button></div>\n    </div>")).join(""), "\n    </div></details>");
+    return '<details id="d-accts" '.concat(S.open["d-accts"] ? "open" : "", "><summary>Accounts and people (").concat(S.cfg.accounts.length, ')</summary>\n    <p class="muted">Money moved between accounts listed here is not counted as spending or income. Add your family members\' accounts by importing their statements.</p>\n    <div style="display:grid;gap:8px">\n    ').concat(S.cfg.accounts.map((a) => '<div class="catrow" style="grid-template-columns:1fr">\n      <div class="formgrid">\n        <label>Name<input type="text" value="'.concat(esc(a.name), '" data-acctname="').concat(esc(a.id), '" id="an-').concat(esc(a.id), '"></label>\n        <label>Whose<input type="text" value="').concat(esc(a.person), '" data-acctperson="').concat(esc(a.id), '" id="ap-').concat(esc(a.id), '"></label>\n        <label>Type<select data-acctkind="').concat(esc(a.id), '">').concat(Object.entries(KIND_NAME).map(([k, n]) => '<option value="'.concat(k, '" ').concat(k === a.kind ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select></label>\n        <label>Account / card number<input type="text" value="').concat(esc(a.iban), '" data-acctiban="').concat(esc(a.id), '" id="ai-').concat(esc(a.id), '" placeholder="FI.."></label>\n      </div>\n      <div class="row"><span class="muted num">').concat(D.all.filter((t) => t.acct === a.id).length, " transactions</span>").concat(a.kind === "card" ? ' <button class="btn small" data-flipacct="'.concat(esc(a.id), '">Flip + / \u2212</button>') : "", " ").concat(S.cfg.accounts.length > 1 ? '<select data-mergeacct="'.concat(esc(a.id), '" aria-label="Merge into another account" style="font-size:12px;padding:3px 6px"><option value="">Same as\u2026</option>').concat(S.cfg.accounts.filter((x) => x.id !== a.id).map((x) => '<option value="'.concat(esc(x.id), '">merge into ').concat(esc(x.name), "</option>")).join(""), "</select>") : "", ' <button class="btn small" data-delacct="').concat(esc(a.id), '">').concat(S.confirm === a.id ? "Tap again: delete account and its transactions" : "Delete account", "</button></div>\n    </div>")).join(""), "\n    </div></details>");
   }
   function guessAccount(row) {
     const ib = normIban(row.account);
@@ -1538,20 +1540,107 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     if (hit) return hit.acct;
     return "new";
   }
+  const dupKey = (t) => "".concat(t.raw || t.id, "|").concat(t.date, "|").concat(Math.round(t.amount * 100));
   function rowPlan(row, queued) {
     const acct = row.acct;
+    const sign = rowFlip(row) ? -1 : 1;
     const have = new Set(D.all.filter((t) => t.acct === acct).map((t) => t.raw || t.id));
+    const haveAny = new Set(D.all.filter((t) => t.src !== "manual").map(dupKey));
     const fresh = [], seen = queued || /* @__PURE__ */ new Set();
     let dups = 0;
     for (const t of row.txns) {
-      const k = "".concat(acct, "|").concat(t.id);
-      if (have.has(t.id) || seen.has(k)) dups++;
+      const k = "".concat(t.id, "|").concat(t.date, "|").concat(Math.round(t.amount * sign * 100));
+      if (have.has(t.id) || haveAny.has(k) || seen.has(k)) dups++;
       else {
         fresh.push(t);
         seen.add(k);
       }
     }
     return { fresh, dups };
+  }
+  function mergeAccount(from, into) {
+    if (from === into) return;
+    const a = S.cfg.accounts.find((x) => x.id === from), b = S.cfg.accounts.find((x) => x.id === into);
+    if (!a || !b) return;
+    for (const [ym, arr] of Object.entries(S.months)) {
+      let ch = false;
+      arr.forEach((t) => {
+        if (t.acct === from) {
+          t.acct = into;
+          ch = true;
+        }
+      });
+      if (ch) markDirty(ym);
+    }
+    S.cfg.statements.forEach((s) => {
+      if (s.acct === from) s.acct = into;
+    });
+    if (!b.iban && a.iban) b.iban = a.iban;
+    S.cfg.accounts = S.cfg.accounts.filter((x) => x.id !== from);
+    markDirty("config");
+  }
+  function cleanDuplicates() {
+    let merged = 0, removed = 0;
+    const order = (id) => S.cfg.accounts.findIndex((a) => a.id === id);
+    const byIban = {};
+    for (const a of [...S.cfg.accounts]) {
+      const ib = normIban(a.iban);
+      if (!ib || a.kind === "cash") continue;
+      if (byIban[ib]) {
+        mergeAccount(a.id, byIban[ib]);
+        merged++;
+      } else byIban[ib] = a.id;
+    }
+    for (let guard = 0; guard < 10; guard++) {
+      const byKey = {};
+      Object.values(S.months).flat().forEach((t) => {
+        var _a;
+        if (t.src !== "manual") (byKey[_a = dupKey(t)] || (byKey[_a] = /* @__PURE__ */ new Set())).add(t.acct);
+      });
+      const pair = {};
+      Object.values(byKey).forEach((s) => {
+        const ids = [...s].sort((x, y) => order(x) - order(y));
+        for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+          const k = ids[i] + ">" + ids[j];
+          pair[k] = (pair[k] || 0) + 1;
+        }
+      });
+      const hit = Object.entries(pair).find(([, n]) => n >= 3);
+      if (!hit) break;
+      const [keep, drop] = hit[0].split(">");
+      const ka = S.cfg.accounts.find((x) => x.id === keep), da = S.cfg.accounts.find((x) => x.id === drop);
+      if (ka && da && normIban(ka.iban) && normIban(da.iban) && normIban(ka.iban) !== normIban(da.iban)) break;
+      mergeAccount(drop, keep);
+      merged++;
+    }
+    const seen = /* @__PURE__ */ new Map();
+    for (const [ym, arr] of Object.entries(S.months)) for (const t of arr) {
+      if (t.src === "manual") continue;
+      const k = "".concat(t.acct, "|").concat(dupKey(t));
+      const prev = seen.get(k);
+      if (!prev) seen.set(k, t);
+      else if (t.manual && !prev.manual) {
+        prev._drop = true;
+        seen.set(k, t);
+      } else t._drop = true;
+    }
+    for (const [ym, arr] of Object.entries(S.months)) {
+      const keep = arr.filter((t) => !t._drop);
+      if (keep.length !== arr.length) {
+        removed += arr.length - keep.length;
+        S.months[ym] = keep;
+        markDirty(ym);
+      }
+    }
+    const sk = /* @__PURE__ */ new Set();
+    S.cfg.statements = S.cfg.statements.filter((s) => {
+      const k = "".concat(s.acct, "|").concat(s.from, "|").concat(s.to);
+      if (sk.has(k)) return false;
+      sk.add(k);
+      return true;
+    });
+    if (merged || removed) markDirty("config");
+    return { merged, removed };
   }
   function vImport() {
     const imp = S.imports;
@@ -1568,7 +1657,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       return '<div class="impcard">\n      <div class="row" style="justify-content:space-between"><b style="word-break:break-all">'.concat(esc(r.name), '</b><span class="muted num">').concat(r.from ? dLabel(r.from) + " \u2013 " + dLabel(r.to) : "", "</span></div>\n      <div>").concat(r.check).concat(r.account ? ' <span class="muted">\xB7 '.concat(esc(r.account), "</span>") : "").concat(r.holder ? ' <span class="muted">\xB7 '.concat(esc(r.holder), "</span>") : "", '</div>\n      <div class="formgrid">\n        <label>Account<select data-imp-acct="').concat(i, '">').concat(acctOpts(r.acct), "</select></label>\n        ").concat(r.acct === "new" ? '<label>Account name<input type="text" data-imp-name="'.concat(i, '" id="imn-').concat(i, '" value="').concat(esc(r.newName), '"></label>\n          <label>Whose<input type="text" data-imp-person="').concat(i, '" id="imp-').concat(i, '" value="').concat(esc(r.newPerson), '" list="people-dl"></label>\n          <label>Type<select data-imp-kind="').concat(i, '"><option value="bank" ').concat(r.newKind === "bank" ? "selected" : "", '>Bank account</option><option value="card" ').concat(r.newKind === "card" ? "selected" : "", ">Credit card</option></select></label>") : "", "\n        ").concat(r.format !== "op" || isCardRow ? '<label class="chk"><input type="checkbox" data-imp-flip="'.concat(i, '" ').concat(rowFlip(r) ? "checked" : "", "> purchases are shown as plus amounts in this file</label>") : "", '\n      </div>\n      <div class="row muted num"><span><b style="color:var(--ink)">').concat(pl.fresh.length, "</b> new</span><span>").concat(pl.dups, ' already saved</span></div>\n      <details><summary>Preview</summary><div class="tablewrap"><table><tbody>').concat(r.txns.slice(0, 8).map((t) => '<tr><td class="num">'.concat(dLabel(t.date), "</td><td>").concat(esc(t.payee), '</td><td class="amt num">').concat(fmt(t.amount * sign), "</td></tr>")).join(""), "</tbody></table></div>").concat(r.txns.length > 8 ? '<p class="muted">\u2026and '.concat(r.txns.length - 8, " more</p>") : "", "</details>\n    </div>");
     }).join("");
     const people = [...new Set(S.cfg.accounts.map((a) => a.person).filter(Boolean))];
-    return '<section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Months imported</h2></div>\n      '.concat(cardSignWarnings(), "\n      ").concat(coverageGrid() || '<p class="muted">Nothing imported yet.</p>', "\n      ").concat(dupNotice(), "\n      ").concat(accountsEditor(), "\n      ").concat(statementsList(), '\n    </section>\n    <section class="panel" style="display:grid;gap:14px">\n      <h2>Add statements</h2>\n      <label class="drop" id="drop" for="file"><b>Choose bank or credit card statements</b><span class="muted">PDF from OP, or CSV exports \xB7 yours or a family member\'s \xB7 read on this device only</span>\n        <span class="btn primary">Choose files</span>\n        <input type="file" id="file" accept=".pdf,.csv,.txt,application/pdf,text/csv" multiple hidden></label>\n      ').concat(cards, '<datalist id="people-dl">').concat(people.map((x) => '<option value="'.concat(esc(x), '">')).join(""), "</datalist>\n      ").concat(imp.length ? '<div class="row"><button class="btn primary" data-doimport '.concat(newTotal ? "" : "disabled", ">Add ").concat(newTotal, " new transaction").concat(newTotal === 1 ? "" : "s", '</button><button class="btn" data-clearimport>Clear list</button></div>') : "", '\n      <p class="muted" style="margin:0;font-size:12px">Credit card statements: once a month\'s card purchases are imported, the repayments to the card from your bank account stop counting as spending for that month, so nothing is counted twice.</p>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h3>Backup</h3>\n      <p class="muted" style="margin:0;font-size:12px">App version 7.2 \xB7 built 11.11.2026 17:32 (Helsinki time)</p>\n      <p class="muted" style="margin:0">Your data is saved ').concat(S.store === "db" ? "with this page and only you can read it" : S.store === "local" ? "in this browser on this device only" : "nowhere (preview)", ". ").concat(D.all.length, " transactions over ").concat(D.allMonths.length, ' months.</p>\n      <div class="row"><button class="btn" data-export>Download backup (JSON)</button>\n      <label class="btn" for="restore">Restore from backup\u2026</label><input type="file" id="restore" accept=".json,application/json" hidden></div>\n    </section>');
+    return '<section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Months imported</h2></div>\n      '.concat(cardSignWarnings(), "\n      ").concat(coverageGrid() || '<p class="muted">Nothing imported yet.</p>', "\n      ").concat(dupNotice(), '\n      <div class="row"><button class="btn small" data-cleandups>Find and remove duplicates</button></div>\n      ').concat(accountsEditor(), "\n      ").concat(statementsList(), '\n    </section>\n    <section class="panel" style="display:grid;gap:14px">\n      <h2>Add statements</h2>\n      <label class="drop" id="drop" for="file"><b>Choose bank or credit card statements</b><span class="muted">PDF from OP, or CSV exports \xB7 yours or a family member\'s \xB7 read on this device only</span>\n        <span class="btn primary">Choose files</span>\n        <input type="file" id="file" accept=".pdf,.csv,.txt,application/pdf,text/csv" multiple hidden></label>\n      ').concat(cards, '<datalist id="people-dl">').concat(people.map((x) => '<option value="'.concat(esc(x), '">')).join(""), "</datalist>\n      ").concat(imp.length ? '<div class="row"><button class="btn primary" data-doimport '.concat(newTotal ? "" : "disabled", ">Add ").concat(newTotal, " new transaction").concat(newTotal === 1 ? "" : "s", '</button><button class="btn" data-clearimport>Clear list</button></div>') : "", '\n      <p class="muted" style="margin:0;font-size:12px">Credit card statements: once a month\'s card purchases are imported, the repayments to the card from your bank account stop counting as spending for that month, so nothing is counted twice.</p>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h3>Backup</h3>\n      <p class="muted" style="margin:0;font-size:12px">App version 7.3 \xB7 built 11.11.2026 17:56 (Helsinki time)</p>\n      <p class="muted" style="margin:0">Your data is saved ').concat(S.store === "db" ? "with this page and only you can read it" : S.store === "local" ? "in this browser on this device only" : "nowhere (preview)", ". ").concat(D.all.length, " transactions over ").concat(D.allMonths.length, ' months.</p>\n      <div class="row"><button class="btn" data-export>Download backup (JSON)</button>\n      <label class="btn" for="restore">Restore from backup\u2026</label><input type="file" id="restore" accept=".json,application/json" hidden></div>\n    </section>');
   }
   function bindDrop() {
     const dz = $("#drop");
@@ -1613,6 +1702,11 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
         } else row.check = '<span class="muted">'.concat(res.txns.length, " rows read \xB7 check the preview</span>");
         row.flipGuess = dep.length > wd.length;
         row.acct = guessAccount(row);
+        if (row.acct === "new" && row.account) {
+          const twin = S.imports.find((x) => x.account && normIban(x.account) === normIban(row.account) && x.acct !== "new");
+          if (twin) row.acct = twin.acct;
+          else if (S.cfg.accounts.length === 1 && !S.cfg.accounts[0].iban && S.cfg.accounts[0].kind === "bank" && res.format === "op") row.acct = S.cfg.accounts[0].id;
+        }
         const isCard = res.format === "generic" || /\*{2,}/.test(res.account || "") || /credit|card|luotto|kortti|visa|master/i.test(f.name);
         row.newKind = isCard ? "card" : "bank";
         row.newPerson = titleCase((res.holder || "").split(" ").slice(-1)[0]) || (((_a = S.cfg.accounts[0]) == null ? void 0 : _a.person) || "Me");
@@ -1639,9 +1733,13 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     for (const r of S.imports) {
       if (r.error) continue;
       if (r.acct === "new") {
-        const a2 = { id: newId("a"), name: r.newName || "Account", person: (r.newPerson || "Me").trim(), kind: r.newKind, iban: r.account || "" };
-        S.cfg.accounts.push(a2);
-        r.acct = a2.id;
+        const same = r.account && S.cfg.accounts.find((x) => normIban(x.iban) === normIban(r.account));
+        if (same) r.acct = same.id;
+        else {
+          const a2 = { id: newId("a"), name: r.newName || "Account", person: (r.newPerson || "Me").trim(), kind: r.newKind, iban: r.account || "" };
+          S.cfg.accounts.push(a2);
+          r.acct = a2.id;
+        }
       }
       const a = S.cfg.accounts.find((x) => x.id === r.acct);
       if (a && !a.iban && r.account) a.iban = r.account;
@@ -1663,13 +1761,14 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     }
     markDirty("config");
     Object.values(S.months).forEach((a) => a.sort((x, y) => x.date.localeCompare(y.date)));
+    const cd = cleanDuplicates();
     S.imports = [];
     derive();
     const sorted = applySuggestions(new Set(added.map((t) => t.label)));
     derive();
     const addedIds = new Set(added.map((t) => t.id));
     const uns = D.E.filter((e) => e.unsorted && addedIds.has(e.t.id)).length;
-    toast("Added ".concat(n, " transactions").concat(sorted ? " \xB7 ".concat(sorted, " sorted automatically") : "").concat(uns ? " \xB7 ".concat(uns, " need a category") : ""));
+    toast("Added ".concat(n - cd.removed, " transactions").concat(cd.removed ? " \xB7 ".concat(cd.removed, " duplicates skipped") : "").concat(sorted ? " \xB7 ".concat(sorted, " sorted automatically") : "").concat(uns ? " \xB7 ".concat(uns, " need a category") : ""));
     if (uns) {
       S.view = "tx";
       S.tx = { q: "", ym: "", cat: "", only: "" };
@@ -1797,7 +1896,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
   }
   document.addEventListener("click", async (e) => {
     var _a, _b, _c, _d, _e, _f, _g;
-    const el = e.target.closest("[data-pick-label],[data-pick-cat],[data-pk-close],[data-pk-label],[data-pk-create],[data-pk-cat],[data-pk-createcat],[data-tile],[data-flow],[data-showall],[data-tab],[data-dim],[data-reg],[data-drill],[data-crumb],[data-month],[data-clearmonth],[data-apply],[data-txonly],[data-gotolabel],[data-gotogroup],[data-delrule],[data-doimport],[data-clearimport],[data-export],[data-deltx],[data-rerun],[data-person],[data-delplan],[data-planall],[data-flipacct],[data-acceptsug],[data-unsall],[data-delstmt],[data-delacct]");
+    const el = e.target.closest("[data-pick-label],[data-pick-cat],[data-pk-close],[data-pk-label],[data-pk-create],[data-pk-cat],[data-pk-createcat],[data-tile],[data-flow],[data-showall],[data-tab],[data-dim],[data-reg],[data-drill],[data-crumb],[data-month],[data-clearmonth],[data-apply],[data-txonly],[data-gotolabel],[data-gotogroup],[data-delrule],[data-doimport],[data-clearimport],[data-export],[data-deltx],[data-rerun],[data-person],[data-delplan],[data-planall],[data-flipacct],[data-acceptsug],[data-unsall],[data-delstmt],[data-delacct],[data-cleandups]");
     if (!el) return;
     const d = el.dataset;
     if (d.pickLabel) {
@@ -1940,6 +2039,11 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       S.person = d.person;
       return render();
     }
+    if ("cleandups" in d) {
+      const cd = cleanDuplicates();
+      toast(cd.removed || cd.merged ? "".concat(cd.removed, " duplicates removed").concat(cd.merged ? ", ".concat(cd.merged, " accounts merged") : "") : "No duplicates found");
+      return render();
+    }
     if ("acceptsug" in d) {
       const n = applySuggestions();
       toast("".concat(n, " transactions sorted"));
@@ -2078,6 +2182,12 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       S.drill = { group: null, category: null, label: null };
       return render();
     }
+    if (d.mergeacct && el.value) {
+      mergeAccount(d.mergeacct, el.value);
+      const cd = cleanDuplicates();
+      toast("Accounts merged".concat(cd.removed ? " \xB7 ".concat(cd.removed, " duplicates removed") : ""));
+      return render();
+    }
     if (d.impAcct !== void 0) {
       S.imports[+d.impAcct].acct = el.value;
       return render();
@@ -2117,6 +2227,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
         (_b = S.cfg).rules || (_b.rules = []);
         (_c = S.cfg).categories || (_c.categories = []);
         migrate();
+        cleanDuplicates();
         [.../* @__PURE__ */ new Set([...old, ...Object.keys(v.months)])].forEach(markDirty);
         markDirty("config");
         toast("Backup restored");
