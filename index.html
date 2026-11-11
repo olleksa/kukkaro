@@ -55,7 +55,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
 .brand b{font-weight:800;font-size:20px;letter-spacing:-.02em}
 .brand span{color:var(--ink-3);font-size:12px}
-nav.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.tabs{display:flex;gap:2px;flex-wrap:wrap;padding-bottom:6px}
 nav.tabs button{border:0;background:none;padding:8px 12px;border-radius:8px;cursor:pointer;color:var(--ink-2);font-weight:600;white-space:nowrap}
 nav.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--ink)}
 nav.tabs button:hover{color:var(--ink)}
@@ -133,6 +133,22 @@ td select{max-width:190px}
 details summary{cursor:pointer;font-weight:600}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
 .savestate{font-size:12px;color:var(--ink-3)}
+.cov td,.cov th{text-align:center;padding:4px 6px;font-size:12px}
+.cov td:first-child,.cov th:first-child{text-align:left;white-space:nowrap}
+.cov .c{display:inline-block;min-width:34px;padding:2px 4px;border-radius:6px;font-weight:700}
+.cov .full{background:var(--accent-soft);color:var(--ink)}
+.cov .part{border:1px dashed var(--accent);color:var(--ink-2)}
+.cov .none{color:var(--bad);opacity:.8}
+.formgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;align-items:end}
+.formgrid label{display:grid;gap:2px;font-size:12px;color:var(--ink-3);font-weight:600}
+.formgrid input,.formgrid select{width:100%}
+input[type=date],input[type=number]{background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;padding:6px 8px;min-width:0}
+.impcard{border:1px solid var(--line);border-radius:var(--r);padding:12px;display:grid;gap:10px;background:var(--surface)}
+.del{border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px}
+.del:hover{color:var(--bad)}
+@media (max-width:600px){nav.tabs button{padding:6px 9px;font-size:13px}.topbar{gap:8px}header.top{position:static}}
+.formgrid label.chk{display:flex;align-items:center;gap:6px;color:var(--ink);font-size:13px}
+.formgrid label.chk input{width:auto}
 @media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
 </style>
 
@@ -147,6 +163,7 @@ details summary{cursor:pointer;font-weight:600}
         <option value="6">Last 6 months</option>
         <option value="3">Last 3 months</option>
       </select>
+      <select id="person" aria-label="Whose money" hidden></select>
     </div>
     <span class="savestate" id="savestate"></span>
   </div>
@@ -187,7 +204,7 @@ details summary{cursor:pointer;font-weight:600}
     const txns = [];
     const summary = {};
     let cur = null;
-    let account = null, period = null;
+    let account = null, period = null, holder = null, isOP = false;
     for (const items of pages) {
       const rows = lines(items);
       let cols = null, started = false;
@@ -197,6 +214,7 @@ details summary{cursor:pointer;font-weight:600}
           const m2 = txt.match(/Account number\s+(FI[\d ]+)/);
           if (m2) account = m2[1].trim();
         }
+        if (!account && !holder && /^[A-ZÅÄÖÜ][A-ZÅÄÖÜ'.-]+(?: [A-ZÅÄÖÜ][A-ZÅÄÖÜ'.-]+){1,4}$/.test(txt) && !/^(BIC|IBAN)/.test(txt)) holder = txt;
         if (!period) {
           const m2 = txt.match(/^(\d{1,2}(?: \w+)?(?: \d{4})? - \d{1,2} \w+ \d{4})$/);
           if (m2) period = m2[1];
@@ -204,7 +222,10 @@ details summary{cursor:pointer;font-weight:600}
         if (!cols) {
           const by = (s) => r.items.find((i) => i.str.trim().startsWith(s));
           const e = by("Entry"), a = by("Amount"), d = by("Description"), ref = by("Reference"), f = by("Filing");
-          if (e && a && d && f) cols = { amount: a.x, desc: d.x, ref: ref ? ref.x : null, filing: f.x };
+          if (e && a && d && f) {
+            cols = { amount: a.x, desc: d.x, ref: ref ? ref.x : null, filing: f.x };
+            isOP = true;
+          }
           continue;
         }
         if (!started) {
@@ -278,7 +299,105 @@ details summary{cursor:pointer;font-weight:600}
       if (!t.payee && t.extra) t.payee = t.extra;
       t.id = t.filing || "".concat(t.date, "_").concat(t.amount, "_").concat(t.payee).replace(/[^\w.:@+~-]/g, "_").slice(0, 120);
     }
-    return { account, period, summary, txns };
+    if (!isOP) return parseGeneric(pages);
+    const range = periodRange(period);
+    return { format: "op", account, holder, period, from: range && range[0], to: range && range[1], summary, txns };
+  }
+  const MONTHS_FULL = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
+  function monthNo(s) {
+    if (!s) return null;
+    s = s.toLowerCase();
+    return MONTHS_FULL[s] || MONTHS[s.slice(0, 1).toUpperCase() + s.slice(1, 3)] || null;
+  }
+  function periodRange(period) {
+    if (!period) return null;
+    const [l, r] = period.split(/\s+-\s+/);
+    const rm = r && r.match(/^(\d{1,2}) (\w+) (\d{4})$/);
+    if (!rm) return null;
+    const lm = l.match(/^(\d{1,2})(?: (\w+))?(?: (\d{4}))?$/);
+    if (!lm) return null;
+    const ry = +rm[3], rmo = monthNo(rm[2]);
+    const lmo = lm[2] ? monthNo(lm[2]) : rmo;
+    const ly = lm[3] ? +lm[3] : lmo > rmo ? ry - 1 : ry;
+    const f = (y, m, d) => "".concat(y, "-").concat(String(m).padStart(2, "0"), "-").concat(String(d).padStart(2, "0"));
+    return [f(ly, lmo, +lm[1]), f(ry, rmo, +rm[1])];
+  }
+  function hash(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36);
+  }
+  function parseGeneric(pages) {
+    const all = pages.map(lines).flat().map((r) => r.items.map((i) => i.str.trim()).filter(Boolean).join(" ").replace(/\s+/g, " "));
+    const years = {};
+    all.forEach((t) => (t.match(/\b20\d\d\b/g) || []).forEach((y) => years[y] = (years[y] || 0) + 1));
+    const defYear = +(Object.entries(years).sort((a, b) => b[1] - a[1])[0] || [(/* @__PURE__ */ new Date()).getFullYear()])[0];
+    let holder = null, account = null;
+    const DATE = /^(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})?\s+|^(\d{4})-(\d{2})-(\d{2})\s+|^(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{4})\s+/i;
+    const AMT = /\s([+\-\u2212]?\s?\d{1,3}(?:[ \u00a0.]\d{3})*,\d{2}|[+\-\u2212]?\d{1,3}(?:,\d{3})*\.\d{2})\s?(-)?\s?(?:EUR|€)?$/;
+    const txns = [];
+    const seen = {};
+    for (const line of all) {
+      if (!account) {
+        const m = line.match(/\b(FI\d{2}(?: ?\d{4}){3} ?\d{2})\b/);
+        if (m) account = m[1];
+      }
+      if (!account) {
+        const m = line.match(/\b(\d{4}[ *]{1,2}[\d*]{2,4}[ *]{1,2}[\d*]{4}[ *]{1,2}\d{4})\b/);
+        if (m) account = m[1].replace(/\s+/g, " ");
+      }
+      const dm = line.match(DATE);
+      if (!dm) continue;
+      let rest = line.slice(dm[0].length);
+      let y, mo, d;
+      if (dm[7]) {
+        d = +dm[7];
+        mo = MONTHS[dm[8].slice(0, 1).toUpperCase() + dm[8].slice(1, 3).toLowerCase()];
+        y = +dm[9];
+      } else if (dm[4]) {
+        y = +dm[4];
+        mo = +dm[5];
+        d = +dm[6];
+      } else {
+        d = +dm[1];
+        mo = +dm[2];
+        y = dm[3] ? dm[3].length === 2 ? 2e3 + +dm[3] : +dm[3] : defYear;
+      }
+      if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) continue;
+      rest = rest.replace(DATE, "");
+      const am = rest.match(AMT);
+      if (!am) continue;
+      let s = am[1].replace(/[\s\u00a0]/g, "").replace("\u2212", "-");
+      s = /,\d{2}$/.test(s) ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+      let amount = parseFloat(s);
+      if (am[2]) amount = -Math.abs(amount);
+      if (!isFinite(amount) || amount === 0) continue;
+      const desc = rest.slice(0, am.index).replace(/\s+\d{1,3}(?:[ .]\d{3})*,\d{2}$/, "").trim();
+      if (!desc || /^(yhteensä|total|saldo|balance|summa)/i.test(desc)) continue;
+      const date = "".concat(y, "-").concat(String(mo).padStart(2, "0"), "-").concat(String(d).padStart(2, "0"));
+      const key = "".concat(date, "|").concat(amount, "|").concat(desc);
+      seen[key] = (seen[key] || 0) + 1;
+      txns.push({ date, amount, type: "", payee: desc, message: "", extra: "", reference: "", filing: "", iban: "", bic: "", id: "g" + hash(key + "#" + seen[key]) });
+    }
+    txns.sort((a, b) => b.date.localeCompare(a.date));
+    const ds = txns.map((t) => t.date).sort();
+    let from = ds[0], to = ds[ds.length - 1];
+    const iso2 = (d, m, y) => "".concat(y, "-").concat(String(m).padStart(2, "0"), "-").concat(String(d).padStart(2, "0"));
+    for (const line of all) {
+      const pm = line.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})\s*[-–]\s*(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+      if (pm) {
+        const f = iso2(pm[1], pm[2], pm[3]), t = iso2(pm[4], pm[5], pm[6]);
+        if (f <= from && t >= to) {
+          from = f;
+          to = t;
+          break;
+        }
+      }
+    }
+    return { format: "generic", account, holder, period: null, from, to, summary: {}, txns };
   }
   function parseCSV(text) {
     const rows = text.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim());
@@ -302,19 +421,20 @@ details summary{cursor:pointer;font-weight:600}
     const txns = [];
     for (const l of rows.slice(1)) {
       const c = split(l);
-      const ds = c[ci.date] || "";
+      const ds2 = c[ci.date] || "";
       let date = null, m;
-      if (m = ds.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/)) date = "".concat(m[3], "-").concat(m[2].padStart(2, "0"), "-").concat(m[1].padStart(2, "0"));
-      else if (m = ds.match(/^(\d{4})-(\d{2})-(\d{2})/)) date = m[0];
+      if (m = ds2.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/)) date = "".concat(m[3], "-").concat(m[2].padStart(2, "0"), "-").concat(m[1].padStart(2, "0"));
+      else if (m = ds2.match(/^(\d{4})-(\d{2})-(\d{2})/)) date = m[0];
       if (!date) continue;
       const amount = parseFloat((c[ci.amt] || "0").replace(/\s/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
       const t = { date, amount, type: c[ci.type] || "", payee: c[ci.payee] || "", message: ci.msg >= 0 ? c[ci.msg] : "", extra: "", reference: ci.ref >= 0 ? c[ci.ref] : "", filing: ci.filing >= 0 ? c[ci.filing] : "", iban: ci.iban >= 0 ? c[ci.iban] : "", bic: "" };
-      t.id = t.filing || "".concat(t.date, "_").concat(t.amount, "_").concat(t.payee).replace(/[^\w.:@+~-]/g, "_").slice(0, 120);
+      t.id = t.filing || "c" + hash("".concat(t.date, "|").concat(t.amount, "|").concat(t.payee, "|").concat(t.message, "|").concat(txns.length));
       txns.push(t);
     }
-    return { account: null, period: null, summary: {}, txns };
+    const ds = txns.map((t) => t.date).sort();
+    return { format: "csv", account: null, holder: null, period: null, from: ds[0], to: ds[ds.length - 1], summary: {}, txns };
   }
-  root.StatementParser = { parseStatement, parseCSV };
+  root.StatementParser = { parseStatement, parseCSV, parseGeneric, periodRange };
 })(typeof window !== "undefined" ? window : globalThis);
 (function(root) {
   const norm = (s) => (s || "").toLowerCase();
@@ -392,7 +512,8 @@ details summary{cursor:pointer;font-weight:600}
     pending: null,
     imports: [],
     loaded: false,
-    store: "memory"
+    store: "memory",
+    person: ""
   };
   try {
     const v = localStorage.getItem("kukkaro.view");
@@ -485,6 +606,7 @@ details summary{cursor:pointer;font-weight:600}
     (_a = S.cfg).labels || (_a.labels = {});
     (_b = S.cfg).rules || (_b.rules = []);
     (_c = S.cfg).categories || (_c.categories = []);
+    migrate();
     clearTimeout(slow);
     S.loaded = true;
     setSaveState(S.store === "db" ? "Saved" : S.store === "local" ? "Saving in this browser only" : "Not saved (preview)");
@@ -508,14 +630,55 @@ details summary{cursor:pointer;font-weight:600}
       const span = monthDiff(ms[0], ms[ms.length - 1]) + 1;
       autoFreq[lab] = ms.length >= 3 && ms.length / span >= 0.75 ? "monthly" : "irregular";
     }
+    const acctMap = Object.fromEntries((cfg.accounts || []).map((a) => [a.id, a]));
+    const ibans = new Set((cfg.accounts || []).map((a) => normIban(a.iban)).filter(Boolean));
+    const cardMonths = /* @__PURE__ */ new Set();
+    (cfg.statements || []).forEach((s) => {
+      var _a2;
+      if (((_a2 = acctMap[s.acct]) == null ? void 0 : _a2.kind) === "card") monthsBetween(s.from, s.to).forEach((m) => cardMonths.add(m));
+    });
+    const prevYm = (ym) => {
+      let y = +ym.slice(0, 4), m = +ym.slice(5) - 1;
+      if (!m) {
+        m = 12;
+        y--;
+      }
+      return "".concat(y, "-").concat(String(m).padStart(2, "0"));
+    };
     const enrich = (t) => {
       const li = cfg.labels[t.label];
+      const a = acctMap[t.acct];
       const catName = (li == null ? void 0 : li.cat) || (t.amount > 0 ? "Other income" : "Uncategorized");
       const c = catMap[catName] || { name: catName, group: t.amount > 0 ? "Income" : "Other", kind: t.amount > 0 ? "income" : "expense" };
+      let cat = c.name, group = c.group, kind = c.kind, note = "";
+      if (kind === "repayment") {
+        const ym = t.date.slice(0, 7);
+        if (cardMonths.has(ym) || cardMonths.has(prevYm(ym))) {
+          kind = "transfer";
+          note = "card purchases imported for this month, so the repayment is not counted";
+        } else {
+          kind = "expense";
+          note = "no card statement for this month yet, so the repayment counts as spending";
+        }
+      }
+      const cp = normIban(t.iban);
+      if (cp && ibans.has(cp) && cp !== normIban(a == null ? void 0 : a.iban)) {
+        kind = "transfer";
+        cat = "Between family accounts";
+        group = "Transfers";
+        note = "goes to another account you track";
+      }
+      if ((a == null ? void 0 : a.kind) === "card" && t.amount > 0 && !li && /suoritus|payment|maksu|kiitos|inbetal|repay/i.test("".concat(t.payee, " ").concat(t.message))) {
+        kind = "transfer";
+        cat = "Card repayment received";
+        group = "Transfers";
+      }
       const fSet = (li == null ? void 0 : li.freq) || null;
-      return { t, cat: c.name, group: c.group, kind: c.kind, freq: fSet || autoFreq[t.label] || "irregular", freqAuto: !fSet, unsorted: !li };
+      return { t, a, person: (a == null ? void 0 : a.person) || "", cat, group, kind, note, freq: fSet || autoFreq[t.label] || "irregular", freqAuto: !fSet, unsorted: !li };
     };
-    const E = all.map(enrich);
+    const people = [...new Set((cfg.accounts || []).map((a) => a.person).filter(Boolean))];
+    if (S.person && !people.includes(S.person)) S.person = "";
+    const E = all.map(enrich).filter((e) => !S.person || e.person === S.person);
     let months = allMonths;
     if (S.period !== "all") months = allMonths.slice(-+S.period);
     const mset = new Set(months);
@@ -526,8 +689,25 @@ details summary{cursor:pointer;font-weight:600}
     cfg.categories.forEach((c) => {
       if (c.kind === "expense" && !expGroups.includes(c.group)) expGroups.push(c.group);
     });
-    D = { catMap, all, E, inP, months, allMonths, fullMonths, nFull, autoFreq, expGroups };
+    D = { catMap, all, E, inP, months, allMonths, fullMonths, nFull, autoFreq, expGroups, acctMap, people };
     return D;
+  }
+  function normIban(s) {
+    return (s || "").replace(/\s+/g, "").toUpperCase();
+  }
+  function monthsBetween(from, to) {
+    const out = [];
+    if (!from || !to) return out;
+    let y = +from.slice(0, 4), m = +from.slice(5, 7);
+    const ey = +to.slice(0, 4), em = +to.slice(5, 7);
+    while (y < ey || y === ey && m <= em) {
+      out.push("".concat(y, "-").concat(String(m).padStart(2, "0")));
+      if (++m > 12) {
+        m = 1;
+        y++;
+      }
+    }
+    return out;
   }
   function monthDiff(a, b) {
     return (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5) - +a.slice(5));
@@ -541,7 +721,7 @@ details summary{cursor:pointer;font-weight:600}
     top.forEach((k, i) => map[k] = "var(--s".concat(i + 1, ")"));
     return { map, top, other: ranked.slice(7) };
   }
-  const TABS = [["overview", "Overview"], ["regular", "Regular & irregular"], ["tx", "Transactions"], ["cats", "Categories & labels"], ["import", "Import"]];
+  const TABS = [["overview", "Overview"], ["regular", "Regular"], ["plan", "Plan"], ["tx", "Transactions"], ["cats", "Categories & rules"], ["import", "Import & months"]];
   function renderTabs() {
     $("#tabs").innerHTML = TABS.map(([k, n]) => '<button role="tab" data-tab="'.concat(k, '" aria-selected="').concat(S.view === k, '">').concat(n).concat(k === "tx" && D && D.E.some((e) => e.unsorted) ? ' <span class="pill warn">'.concat(D.E.filter((e) => e.unsorted).length, "</span>") : "", "</button>")).join("");
   }
@@ -549,15 +729,19 @@ details summary{cursor:pointer;font-weight:600}
     derive();
     renderTabs();
     $("#period").value = S.period;
+    const ps = $("#person");
+    ps.hidden = D.people.length < 2;
+    ps.innerHTML = '<option value="">Everyone</option>' + D.people.map((x) => "<option ".concat(x === S.person ? "selected" : "", ">").concat(esc(x), "</option>")).join("");
     const m = $("#main");
     if (!D.all.length && S.view !== "import") {
       m.innerHTML = emptyState();
       return;
     }
-    m.innerHTML = { overview: vOverview, regular: vRegular, tx: vTx, cats: vCats, import: vImport }[S.view]();
+    m.innerHTML = { overview: vOverview, regular: vRegular, plan: vPlan, tx: vTx, cats: vCats, import: vImport }[S.view]();
     if (S.view === "import") bindDrop();
   }
   function emptyState() {
+    if (S.person) return '<div class="panel empty"><h2>Nothing for '.concat(esc(S.person), ' yet</h2><button class="btn" data-person="">Show everyone</button></div>');
     return '<div class="panel empty"><h2>No transactions yet</h2><p class="muted" style="max-width:46ch">Add your OP bank statement PDFs (or a CSV export) in Import. Each one is checked against the statement\'s own totals before it is saved.</p><button class="btn primary" data-tab="import">Import statements</button></div>';
   }
   function drillFilter(e) {
@@ -584,7 +768,10 @@ details summary{cursor:pointer;font-weight:600}
     const avgSpend = sum(fExp, spend) / nFull, avgInc = sum(fInc, (e) => e.t.amount) / nFull;
     const avgReg = sum(fExp.filter((e) => isRegular(e.freq)), spend) / nFull;
     const partial = months.includes(CUR_YM);
-    const tiles = '<div class="tiles">\n    '.concat(tile("Income / month", fmt0(avgInc), "avg of ".concat(nFull, " full month").concat(nFull > 1 ? "s" : "")), "\n    ").concat(tile("Spending / month", fmt0(avgSpend), "transfers to own accounts excluded"), "\n    ").concat(tile("Regular / month", fmt0(avgReg), "".concat(Math.round(avgReg / (avgSpend || 1) * 100), " % of spending")), "\n    ").concat(tile("Irregular / month", fmt0(avgSpend - avgReg), "one-offs and occasional"), "\n    ").concat(tile("Net / month", (avgInc - avgSpend >= 0 ? "+" : "") + fmt0(avgInc - avgSpend), "income minus spending"), "\n  </div>");
+    const tiles = '<div class="tiles">\n    '.concat(tile("Income / month", fmt0(avgInc), "avg of ".concat(nFull, " full month").concat(nFull > 1 ? "s" : "")), "\n    ").concat(tile("Spending / month", fmt0(avgSpend), "transfers to own accounts excluded"), "\n    ").concat(tile("Regular / month", fmt0(avgReg), "".concat(Math.round(avgReg / (avgSpend || 1) * 100), " % of spending")), "\n    ").concat(tile("Irregular / month", fmt0(avgSpend - avgReg), "one-offs and occasional"), "\n    ").concat(tile("Net / month", (avgInc - avgSpend >= 0 ? "+" : "") + fmt0(avgInc - avgSpend), "income minus spending"), "\n    ").concat((() => {
+      const nx = planItems(TODAY_ISO, addDays(TODAY_ISO, 30)).filter((i) => !i.paid && i.amount < 0);
+      return '<button class="tile" data-tab="plan" style="text-align:left;cursor:pointer;font:inherit;color:inherit"><span class="k">Expected next 30 days</span><span class="v">'.concat(fmt0(nx.reduce((s, i) => s - i.amount, 0)), '</span><span class="s">').concat(nx.length, " payments \xB7 open plan \u203A</span></button>");
+    })(), "\n  </div>");
     const lv = level();
     const rows = exp.filter(drillFilter);
     const allRows = D.E.filter((e) => e.kind === "expense" && drillFilter(e));
@@ -626,7 +813,7 @@ details summary{cursor:pointer;font-weight:600}
   function tile(k, v, s) {
     return '<div class="tile"><span class="k">'.concat(k, '</span><span class="v">').concat(v, '</span><span class="s">').concat(s, "</span></div>");
   }
-  function stackedBars(months, series, byMonth, colorOf, more, baseW = 700) {
+  function stackedBars(months, series, byMonth, colorOf, more, baseW = 700, noDrill = false) {
     const W = Math.max(baseW, months.length * 72), H = 280, padL = 56, padR = 8, padT = 12, padB = 32;
     const totals = months.map((m) => Object.values(byMonth[m]).reduce((s, v) => s + Math.max(0, v), 0));
     const max = niceMax(Math.max(1, ...totals));
@@ -644,7 +831,7 @@ details summary{cursor:pointer;font-weight:600}
         const y1 = y(acc + v), y0 = y(acc);
         acc += v;
         const h = Math.max(0, y0 - y1 - 2);
-        g += '<rect class="seg-r" data-drill="'.concat(k === more ? "" : esc(k), '" data-month="').concat(m, '" x="').concat(cx - bw / 2, '" y="').concat(y1, '" width="').concat(bw, '" height="').concat(h, '" rx="3" fill="').concat(colorOf(k), '" style="cursor:pointer"><title>').concat(esc(k), " \xB7 ").concat(ymLong(m), ": ").concat(fmt(v), "</title></rect>");
+        g += '<rect class="seg-r" '.concat(noDrill ? "" : 'data-drill="'.concat(k === more ? "" : esc(k), '"'), ' data-month="').concat(m, '" x="').concat(cx - bw / 2, '" y="').concat(y1, '" width="').concat(bw, '" height="').concat(h, '" rx="3" fill="').concat(colorOf(k), '" style="cursor:pointer"><title>').concat(esc(k), " \xB7 ").concat(ymLong(m), ": ").concat(fmt(v), "</title></rect>");
       });
       const sel = S.selMonth === m;
       g += '<text x="'.concat(cx, '" y="').concat(y(totals[i]) - 6, '" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink-2)">').concat(totals[i] ? fmt0(totals[i]) : "", "</text>");
@@ -671,9 +858,10 @@ details summary{cursor:pointer;font-weight:600}
   }
   function txTable(list, compact) {
     if (!list.length) return '<p class="muted">No transactions match.</p>';
+    const multiAcct = (S.cfg.accounts || []).length > 1;
     return '<div class="tablewrap"><table><thead><tr><th>Date</th><th>Payee / message</th><th class="amt">Amount</th><th>Label</th><th>Category</th><th>Repeats</th></tr></thead><tbody>'.concat(list.map((e) => {
       const t = e.t;
-      return '<tr><td class="num" style="white-space:nowrap">'.concat(dLabel(t.date), '</td>\n      <td><div class="who" title="').concat(esc(t.payee), '">').concat(esc(t.payee), '</div><div class="sub" title="').concat(esc(t.message), '">').concat(esc(t.type)).concat(t.message ? " \xB7 " + esc(t.message) : "", '</div></td>\n      <td class="amt num ').concat(t.amount > 0 ? "pos" : "neg", '">').concat(t.amount > 0 ? "+" : "").concat(fmt(t.amount), '</td>\n      <td><input type="text" list="labels-dl" value="').concat(esc(t.label), '" data-label-for="').concat(esc(t.id), '" aria-label="Label" id="lbl-').concat(esc(t.id)).concat(compact ? "-o" : "", '"></td>\n      <td>').concat(e.unsorted ? '<select data-labelcat="'.concat(esc(t.label), '" aria-label="Category"><option value="" selected>\u2014 choose \u2014</option>').concat(catOptions(""), "</select>") : '<select data-labelcat="'.concat(esc(t.label), '" aria-label="Category">').concat(catOptions(e.cat), "</select>"), "</td>\n      <td>").concat(freqSelect(e, 'data-labelfreq="'.concat(esc(t.label), '"')), "</td></tr>");
+      return '<tr><td class="num" style="white-space:nowrap">'.concat(dLabel(t.date), '</td>\n      <td><div class="who" title="').concat(esc(t.payee), '">').concat(esc(t.payee), '</div><div class="sub" title="').concat(esc((e.note ? e.note + " \xB7 " : "") + t.message), '">').concat(multiAcct ? esc(e.a ? e.a.name : "") + " \xB7 " : "").concat(esc(t.type)).concat(t.message ? " \xB7 " + esc(t.message) : "").concat(e.kind === "transfer" && e.note ? " \xB7 <i>not counted</i>" : "", '</div></td>\n      <td class="amt num ').concat(t.amount > 0 ? "pos" : "neg", '">').concat(t.amount > 0 ? "+" : "").concat(fmt(t.amount)).concat(t.src === "manual" ? ' <button class="del" data-deltx="'.concat(esc(t.id), '" title="Delete this entry" aria-label="Delete this entry">\xD7</button>') : "", '</td>\n      <td><input type="text" list="labels-dl" value="').concat(esc(t.label), '" data-label-for="').concat(esc(t.id), '" aria-label="Label" id="lbl-').concat(esc(t.id)).concat(compact ? "-o" : "", '"></td>\n      <td>').concat(e.unsorted ? '<select data-labelcat="'.concat(esc(t.label), '" aria-label="Category"><option value="" selected>\u2014 choose \u2014</option>').concat(catOptions(""), "</select>") : '<select data-labelcat="'.concat(esc(t.label), '" aria-label="Category">').concat(catOptions(e.cat), "</select>"), "</td>\n      <td>").concat(freqSelect(e, 'data-labelfreq="'.concat(esc(t.label), '"')), "</td></tr>");
     }).join(""), '</tbody></table></div><datalist id="labels-dl">').concat(Object.keys(S.cfg.labels).sort().map((l) => '<option value="'.concat(esc(l), '">')).join(""), "</datalist>");
   }
   function labelStats() {
@@ -728,7 +916,7 @@ details summary{cursor:pointer;font-weight:600}
     const big = inP.filter((e) => e.kind === "expense" && !isRegular(e.freq)).sort((a, b) => spend(b) - spend(a)).slice(0, 12);
     const byGroup = {};
     reg.forEach((s) => byGroup[s.group] = (byGroup[s.group] || 0) + s.perMonth);
-    return '<div class="tiles">\n      '.concat(tile("Regular commitments / month", fmt0(regTot), "".concat(reg.filter((s) => !s.stopped).length, " active recurring labels")), "\n      ").concat(tile("\u2026of which yearly / quarterly", fmt0(reg.filter((s) => !s.stopped && s.freq !== "monthly" && s.freq !== "weekly").reduce((a, s) => a + s.perMonth, 0)), "set aside monthly"), "\n      ").concat(tile("Irregular / month (avg)", fmt0(irr.reduce((a, s) => a + s.total, 0) / D.nFull), "".concat(irr.length, " labels")), '\n    </div>\n    <section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h3>Regular vs irregular by month</h3><div class="legend"><span class="row"><i style="background:var(--s1)"></i>Regular</span><span class="row"><i style="background:var(--s2)"></i>Irregular</span></div></div>\n      <div class="chartbox">').concat(stackedBars(months, ["Regular", "Irregular"], byMonth, colorOf, null, 1100), '</div>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <div class="row" style="justify-content:space-between"><h3>Regular expenses</h3><span class="muted">Per month = typical payment converted to a monthly amount</span></div>\n      <div class="tablewrap"><table><thead><tr><th>Label</th><th>Category</th><th>Repeats</th><th class="amt">Typical</th><th class="amt">Per month</th><th>Last paid</th><th>Next expected</th></tr></thead><tbody>\n      ').concat(reg.map((s) => '<tr><td><button class="btn link" data-gotolabel="'.concat(esc(s.label), '">').concat(esc(s.label), '</button></td><td><span class="muted">').concat(esc(s.group), " \u203A</span> ").concat(esc(s.cat), "</td>\n        <td>").concat(freqSelect(s, 'data-labelfreq="'.concat(esc(s.label), '"')), '</td><td class="amt num">').concat(fmt(s.typical), '</td><td class="amt num">').concat(s.stopped ? '<s class="muted">'.concat(fmt(s.perMonth), "</s>") : "<b>".concat(fmt(s.perMonth), "</b>"), '</td>\n        <td class="num">').concat(dLabel(s.last), '</td><td class="num">').concat(s.stopped ? '<span class="pill" title="No payment for over two periods; left out of the total">stopped?</span>' : s.next ? s.next < TODAY.toISOString().slice(0, 10) ? '<span class="pill warn">'.concat(dLabel(s.next), "</span>") : dLabel(s.next) : "", "</td></tr>")).join(""), '\n      <tr><td colspan="4"><b>Total</b></td><td class="amt num"><b>').concat(fmt(regTot), '</b></td><td colspan="2"></td></tr></tbody></table></div>\n      <details><summary>Regular commitments by group</summary><div class="rank" style="margin-top:8px">').concat(Object.entries(byGroup).sort((a, b) => b[1] - a[1]).map(([g, v]) => '<button data-gotogroup="'.concat(esc(g), '"><span class="nm">').concat(esc(g), '</span><span class="num">').concat(fmt0(v), ' / month</span><span class="bar"><i style="width:').concat(v / regTot * 100, '%;background:var(--s1)"></i></span></button>')).join(""), "</div></details>\n    </section>\n    ").concat(cand.length ? '<section class="panel" style="display:grid;gap:10px"><h3>Seen in several months but marked irregular</h3><p class="muted" style="margin:0">If any of these are really recurring, set how often they repeat.</p>\n      <div class="tablewrap"><table><thead><tr><th>Label</th><th>Category</th><th>Months seen</th><th class="amt">Total</th><th>Repeats</th></tr></thead><tbody>\n      '.concat(cand.map((s) => '<tr><td><button class="btn link" data-gotolabel="'.concat(esc(s.label), '">').concat(esc(s.label), "</button></td><td>").concat(esc(s.cat), '</td><td class="num">').concat(Object.keys(s.months).length, '</td><td class="amt num">').concat(fmt(s.total), "</td><td>").concat(freqSelect(s, 'data-labelfreq="'.concat(esc(s.label), '"')), "</td></tr>")).join(""), "</tbody></table></div></section>") : "", '\n    <section class="panel" style="display:grid;gap:10px"><h3>Largest irregular expenses</h3>').concat(txTable(big, true), "</section>");
+    return '<div class="tiles">\n      '.concat(tile("Regular commitments / month", fmt0(regTot), "".concat(reg.filter((s) => !s.stopped).length, " active recurring labels")), "\n      ").concat(tile("\u2026of which yearly / quarterly", fmt0(reg.filter((s) => !s.stopped && s.freq !== "monthly" && s.freq !== "weekly").reduce((a, s) => a + s.perMonth, 0)), "set aside monthly"), "\n      ").concat(tile("Irregular / month (avg)", fmt0(irr.reduce((a, s) => a + s.total, 0) / D.nFull), "".concat(irr.length, " labels")), '\n    </div>\n    <section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h3>Regular vs irregular by month</h3><div class="legend"><span class="row"><i style="background:var(--s1)"></i>Regular</span><span class="row"><i style="background:var(--s2)"></i>Irregular</span></div></div>\n      <div class="chartbox">').concat(stackedBars(months, ["Regular", "Irregular"], byMonth, colorOf, null, 1100, true), '</div>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <div class="row" style="justify-content:space-between"><h3>Regular expenses</h3><span class="muted">Per month = typical payment converted to a monthly amount</span></div>\n      <div class="tablewrap"><table><thead><tr><th>Label</th><th>Category</th><th>Repeats</th><th class="amt">Typical</th><th class="amt">Per month</th><th>Last paid</th><th>Next expected</th></tr></thead><tbody>\n      ').concat(reg.map((s) => '<tr><td><button class="btn link" data-gotolabel="'.concat(esc(s.label), '">').concat(esc(s.label), '</button></td><td><span class="muted">').concat(esc(s.group), " \u203A</span> ").concat(esc(s.cat), "</td>\n        <td>").concat(freqSelect(s, 'data-labelfreq="'.concat(esc(s.label), '"')), '</td><td class="amt num">').concat(fmt(s.typical), '</td><td class="amt num">').concat(s.stopped ? '<s class="muted">'.concat(fmt(s.perMonth), "</s>") : "<b>".concat(fmt(s.perMonth), "</b>"), '</td>\n        <td class="num">').concat(dLabel(s.last), '</td><td class="num">').concat(s.stopped ? '<span class="pill" title="No payment for over two periods; left out of the total">stopped?</span>' : s.next ? s.next < TODAY.toISOString().slice(0, 10) ? '<span class="pill warn">'.concat(dLabel(s.next), "</span>") : dLabel(s.next) : "", "</td></tr>")).join(""), '\n      <tr><td colspan="4"><b>Total</b></td><td class="amt num"><b>').concat(fmt(regTot), '</b></td><td colspan="2"></td></tr></tbody></table></div>\n      <details><summary>Regular commitments by group</summary><div class="rank" style="margin-top:8px">').concat(Object.entries(byGroup).sort((a, b) => b[1] - a[1]).map(([g, v]) => '<button data-gotogroup="'.concat(esc(g), '"><span class="nm">').concat(esc(g), '</span><span class="num">').concat(fmt0(v), ' / month</span><span class="bar"><i style="width:').concat(v / regTot * 100, '%;background:var(--s1)"></i></span></button>')).join(""), "</div></details>\n    </section>\n    ").concat(cand.length ? '<section class="panel" style="display:grid;gap:10px"><h3>Seen in several months but marked irregular</h3><p class="muted" style="margin:0">If any of these are really recurring, set how often they repeat.</p>\n      <div class="tablewrap"><table><thead><tr><th>Label</th><th>Category</th><th>Months seen</th><th class="amt">Total</th><th>Repeats</th></tr></thead><tbody>\n      '.concat(cand.map((s) => '<tr><td><button class="btn link" data-gotolabel="'.concat(esc(s.label), '">').concat(esc(s.label), "</button></td><td>").concat(esc(s.cat), '</td><td class="num">').concat(Object.keys(s.months).length, '</td><td class="amt num">').concat(fmt(s.total), "</td><td>").concat(freqSelect(s, 'data-labelfreq="'.concat(esc(s.label), '"')), "</td></tr>")).join(""), "</tbody></table></div></section>") : "", '\n    <section class="panel" style="display:grid;gap:10px"><h3>Largest irregular expenses</h3>').concat(txTable(big, true), "</section>");
   }
   function vTx() {
     const f = S.tx;
@@ -745,8 +933,15 @@ details summary{cursor:pointer;font-weight:600}
     });
     const nUns = D.inP.filter((e) => e.unsorted).length;
     const ap = S.pending;
-    return "".concat(ap ? '<div class="applybar"><span>Label <b>'.concat(esc(ap.label), "</b> set. ").concat(ap.ids.length ? "".concat(ap.ids.length, " other transaction").concat(ap.ids.length > 1 ? "s" : "", " from <b>").concat(esc(ap.payee), "</b> ").concat(ap.ids.length > 1 ? "have" : "has", " a different label.") : "Use it for <b>".concat(esc(ap.payee), "</b> in future imports too?"), '</span>\n      <button class="btn primary small" data-apply="all">').concat(ap.ids.length ? "Apply to all from ".concat(esc(ap.payee), " and remember") : "Remember for this payee", '</button>\n      <button class="btn small" data-apply="one">Only this one</button></div>') : "", "\n    ").concat(nUns ? '<div class="notice">'.concat(nUns, " transaction").concat(nUns > 1 ? "s have labels" : " has a label", ' without a category. <button class="btn link" data-txonly="unsorted">Show them</button></div>') : "", '\n    <section class="panel" style="display:grid;gap:12px">\n      <div class="row">\n        <input type="search" id="tx-q" placeholder="Search payee, message, label, amount" value="').concat(esc(f.q), '" style="flex:1;min-width:200px" aria-label="Search">\n        <select id="tx-ym" aria-label="Month"><option value="">All months</option>').concat(D.months.slice().reverse().map((m) => '<option value="'.concat(m, '" ').concat(f.ym === m ? "selected" : "", ">").concat(ymLong(m), "</option>")).join(""), '</select>\n        <select id="tx-cat" aria-label="Category"><option value="">All categories</option>').concat(catOptions(f.cat), '</select>\n        <select id="tx-only" aria-label="Type">').concat([["", "Everything"], ["expense", "Spending"], ["income", "Income"], ["transfer", "Own transfers"], ["unsorted", "Needs category"]].map(([v, n]) => '<option value="'.concat(v, '" ').concat(f.only === v ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select>\n      </div>\n      <div class="muted num">').concat(list.length, " transactions \xB7 net ").concat(fmt(list.reduce((s, e) => s + e.t.amount, 0)), "</div>\n      ").concat(txTable(list.slice(0, 400)), "\n      ").concat(list.length > 400 ? '<p class="muted">Showing 400 of '.concat(list.length, "; narrow the filters to see the rest.</p>") : "", '\n      <p class="muted" style="margin:0;font-size:12px">Category and \u201CRepeats\u201D belong to the label, so changing them updates every transaction with that label.</p>\n    </section>');
+    return "".concat(ap ? '<div class="applybar"><span>Label <b>'.concat(esc(ap.label), "</b> set. ").concat(ap.ids.length ? "".concat(ap.ids.length, " other transaction").concat(ap.ids.length > 1 ? "s" : "", " from <b>").concat(esc(ap.payee), "</b> ").concat(ap.ids.length > 1 ? "have" : "has", " a different label.") : "Use it for <b>".concat(esc(ap.payee), "</b> in future imports too?"), '</span>\n      <button class="btn primary small" data-apply="all">').concat(ap.ids.length ? "Apply to all from ".concat(esc(ap.payee), " and remember") : "Remember for this payee", '</button>\n      <button class="btn small" data-apply="one">Only this one</button></div>') : "", "\n    ").concat(cashForm(), "\n    ").concat(nUns ? '<div class="notice">'.concat(nUns, " transaction").concat(nUns > 1 ? "s have labels" : " has a label", ' without a category. <button class="btn link" data-txonly="unsorted">Show them</button></div>') : "", '\n    <section class="panel" style="display:grid;gap:12px">\n      <div class="row">\n        <input type="search" id="tx-q" placeholder="Search payee, message, label, amount" value="').concat(esc(f.q), '" style="flex:1;min-width:200px" aria-label="Search">\n        <select id="tx-ym" aria-label="Month"><option value="">All months</option>').concat(D.months.slice().reverse().map((m) => '<option value="'.concat(m, '" ').concat(f.ym === m ? "selected" : "", ">").concat(ymLong(m), "</option>")).join(""), '</select>\n        <select id="tx-cat" aria-label="Category"><option value="">All categories</option>').concat(catOptions(f.cat), '</select>\n        <select id="tx-only" aria-label="Type">').concat([["", "Everything"], ["expense", "Spending"], ["income", "Income"], ["transfer", "Own transfers"], ["unsorted", "Needs category"]].map(([v, n]) => '<option value="'.concat(v, '" ').concat(f.only === v ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select>\n      </div>\n      <div class="muted num">').concat(list.length, " transactions \xB7 net ").concat(fmt(list.reduce((s, e) => s + e.t.amount, 0)), "</div>\n      ").concat(txTable(list.slice(0, 400)), "\n      ").concat(list.length > 400 ? '<p class="muted">Showing 400 of '.concat(list.length, "; narrow the filters to see the rest.</p>") : "", '\n      <p class="muted" style="margin:0;font-size:12px">Category and \u201CRepeats\u201D belong to the label, so changing them updates every transaction with that label.</p>\n    </section>');
   }
+  function cashForm() {
+    const cashAccts = S.cfg.accounts.filter((a) => a.kind === "cash");
+    const people = [...new Set(S.cfg.accounts.map((a) => a.person).filter(Boolean))];
+    const opts = cashAccts.map((a) => '<option value="'.concat(esc(a.id), '">').concat(esc(a.name), "</option>")).join("") + (people.length ? people : ["Me"]).filter((pp) => !cashAccts.some((a) => a.person === pp)).map((pp) => '<option value="new:'.concat(esc(pp), '">Cash \u2013 ').concat(esc(pp), "</option>")).join("");
+    return '<details class="panel" id="cashbox" '.concat(S.cashOpen ? "open" : "", '><summary>\uFF0B Add cash or other manual entry</summary>\n    <form id="cashform" class="formgrid" style="margin-top:10px">\n      <label>Date<input type="date" id="c-date" value="').concat(TODAY.toISOString().slice(0, 10), '" required></label>\n      <label>Direction<select id="c-dir"><option value="out">Spent</option><option value="in">Received</option></select></label>\n      <label>Amount \u20AC<input type="text" id="c-amt" inputmode="decimal" required placeholder="0,00" autocomplete="off"></label>\n      <label>What for<input type="text" id="c-desc" required placeholder="e.g. Market, haircut"></label>\n      <label>Label<input type="text" id="c-label" list="labels-dl2" placeholder="same as \u201CWhat for\u201D"></label>\n      <label>Category<select id="c-cat"><option value="">from label / Uncategorized</option>').concat(catOptions(""), '</select></label>\n      <label>Wallet<select id="c-acct">').concat(opts, '</select></label>\n      <button class="btn primary" type="submit">Add entry</button>\n    </form><datalist id="labels-dl2">').concat(Object.keys(S.cfg.labels).sort().map((l) => '<option value="'.concat(esc(l), '">')).join(""), "</datalist></details>");
+  }
+  const KINDS = [["expense", "spending"], ["income", "income"], ["transfer", "transfer (not counted)"], ["repayment", "card repayment"]];
   function vCats() {
     const cats = S.cfg.categories;
     const groups = [];
@@ -767,21 +962,233 @@ details summary{cursor:pointer;font-weight:600}
     const cards = groups.map((g) => {
       const cs = cats.filter((c) => c.group === g);
       const gt = cs.reduce((s, c) => s + (tot[c.name] || 0), 0);
-      return '<div class="gcard"><header><input type="text" value="'.concat(esc(g), '" data-rengroup="').concat(esc(g), '" aria-label="Group name" id="grp-').concat(esc(g), '"><span class="num muted">').concat(fmt0(Math.abs(gt)), "</span></header>\n      ").concat(cs.map((c) => '<div class="catrow"><input type="text" value="'.concat(esc(c.name), '" data-rencat="').concat(esc(c.name), '" aria-label="Category name" id="cat-').concat(esc(c.name), '"><span class="num muted" title="').concat(cnt[c.name] || 0, ' transactions">').concat(fmt0(Math.abs(tot[c.name] || 0)), '</span>\n        <div class="ctl"><select data-catgroup="').concat(esc(c.name), '" aria-label="Move to group">').concat(groupOpts(c.group), '</select>\n        <select data-catkind="').concat(esc(c.name), '" aria-label="Kind">').concat(["expense", "income", "transfer"].map((k) => "<option ".concat(k === c.kind ? "selected" : "", ">").concat(k, "</option>")).join(""), '</select>\n        <select data-catmerge="').concat(esc(c.name), '" aria-label="Merge into"><option value="">Merge into\u2026</option>').concat(cats.filter((x) => x.name !== c.name).map((x) => "<option>".concat(esc(x.name), "</option>")).join(""), "</select></div></div>")).join(""), "\n    </div>");
+      return '<div class="gcard"><header><input type="text" value="'.concat(esc(g), '" data-rengroup="').concat(esc(g), '" aria-label="Group name" id="grp-').concat(esc(g), '"><span class="num muted">').concat(fmt0(Math.abs(gt)), "</span></header>\n      ").concat(cs.map((c) => '<div class="catrow"><input type="text" value="'.concat(esc(c.name), '" data-rencat="').concat(esc(c.name), '" aria-label="Category name" id="cat-').concat(esc(c.name), '"><span class="num muted" title="').concat(cnt[c.name] || 0, ' transactions">').concat(fmt0(Math.abs(tot[c.name] || 0)), '</span>\n        <div class="ctl"><select data-catgroup="').concat(esc(c.name), '" aria-label="Move to group">').concat(groupOpts(c.group), '</select>\n        <select data-catkind="').concat(esc(c.name), '" aria-label="Kind">').concat(KINDS.map(([k, n]) => '<option value="'.concat(k, '" ').concat(k === c.kind ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select>\n        <select data-catmerge="').concat(esc(c.name), '" aria-label="Merge into"><option value="">Merge into\u2026</option>').concat(cats.filter((x) => x.name !== c.name).map((x) => "<option>".concat(esc(x.name), "</option>")).join(""), "</select></div></div>")).join(""), "\n    </div>");
     }).join("");
     const labels = Object.entries(S.cfg.labels).sort((a, b) => Math.abs(labTot[b[0]] || 0) - Math.abs(labTot[a[0]] || 0));
-    return '<section style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Groups and categories</h2>\n        <form class="row" id="addcat"><input type="text" id="newcat" placeholder="New category" aria-label="New category name" required><select id="newcatgroup" aria-label="Group">'.concat(groupOpts(""), '</select><button class="btn primary" type="submit">Add</button></form></div>\n      <p class="muted" style="margin:0">Charts stack by group, then drill into categories, then labels. To combine categories under one heading, move them into the same group, or rename a group to an existing name. \u201CMerge into\u201D moves every label of a category into another and removes it.</p>\n      <div class="cards">').concat(cards, '</div>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h2>Labels</h2><p class="muted" style="margin:0">Renaming a label to one that already exists merges them.</p>\n      <div class="tablewrap"><table><thead><tr><th>Label</th><th>Category</th><th>Repeats</th><th class="amt">Count</th><th class="amt">Total</th><th></th></tr></thead><tbody>\n      ').concat(labels.map(([l, v]) => '<tr><td><input type="text" value="'.concat(esc(l), '" data-renlabel="').concat(esc(l), '" aria-label="Label name" id="lab-').concat(esc(l), '"></td><td><select data-labelcat="').concat(esc(l), '" aria-label="Category">').concat(catOptions(v.cat), '</select></td>\n      <td><select data-labelfreq="').concat(esc(l), '" aria-label="Repeats"><option value="" ').concat(!v.freq ? "selected" : "", ">auto: ").concat(D.autoFreq[l] || "irregular", "</option>").concat(FREQS.map((f) => "<option ".concat(f === v.freq ? "selected" : "", ">").concat(f, "</option>")).join(""), '</select></td>\n      <td class="amt num">').concat(labCount[l] || 0, '</td><td class="amt num">').concat(fmt(labTot[l] || 0), '</td><td><button class="btn link" data-gotolabel="').concat(esc(l), '">transactions</button></td></tr>')).join(""), '</tbody></table></div>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <details><summary>Auto-label rules (').concat(S.cfg.rules.length, ')</summary>\n      <p class="muted">Applied to new imports and to any transaction you haven\'t relabeled by hand. More specific rules (with an amount) win.</p>\n      <div class="tablewrap"><table><thead><tr><th>When</th><th>contains</th><th class="amt">amount</th><th>\u2192 label</th><th></th></tr></thead><tbody>\n      ').concat(BudgetLogic.sortedRules(S.cfg).map((r) => "<tr><td>".concat(esc(r.field === "any" ? "payee or message" : r.field)).concat(r.sign ? " (".concat(r.sign === "in" ? "incoming" : "outgoing", ")") : "", '</td><td class="mono">').concat(esc(r.contains), '</td><td class="amt num">').concat(r.amount != null ? fmt(r.amount) : "", "</td><td>").concat(esc(r.label), '</td><td><button class="btn small" data-delrule="').concat(esc(r.id), '">Delete</button></td></tr>')).join(""), "\n      </tbody></table></div></details>\n    </section>");
+    return '<section style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Groups and categories</h2>\n        <form class="row" id="addcat"><input type="text" id="newcat" placeholder="New category" aria-label="New category name" required><select id="newcatgroup" aria-label="Group">'.concat(groupOpts(""), '</select><button class="btn primary" type="submit">Add</button></form></div>\n      <p class="muted" style="margin:0">Charts stack by group, then drill into categories, then labels. To combine categories under one heading, move them into the same group, or rename a group to an existing name. \u201CMerge into\u201D moves every label of a category into another and removes it.</p>\n      <div class="cards">').concat(cards, '</div>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h2>Labels</h2><p class="muted" style="margin:0">A label groups transactions (usually one payee or purpose) and belongs to one category. Renaming a label to one that already exists merges them.</p>\n      <form id="addlabel" class="formgrid"><label>New label<input type="text" id="nl-name" required></label><label>Category<select id="nl-cat">').concat(catOptions("Uncategorized"), '</select></label>\n        <label>Repeats<select id="nl-freq"><option value="">auto</option>').concat(FREQS.map((f) => "<option>".concat(f, "</option>")).join(""), '</select></label><button class="btn primary" type="submit">Add label</button></form>\n      <div class="tablewrap"><table><thead><tr><th>Label</th><th>Category</th><th>Repeats</th><th class="amt">Count</th><th class="amt">Total</th><th></th></tr></thead><tbody>\n      ').concat(labels.map(([l, v]) => '<tr><td><input type="text" value="'.concat(esc(l), '" data-renlabel="').concat(esc(l), '" aria-label="Label name" id="lab-').concat(esc(l), '"></td><td><select data-labelcat="').concat(esc(l), '" aria-label="Category">').concat(catOptions(v.cat), '</select></td>\n      <td><select data-labelfreq="').concat(esc(l), '" aria-label="Repeats"><option value="" ').concat(!v.freq ? "selected" : "", ">auto: ").concat(D.autoFreq[l] || "irregular", "</option>").concat(FREQS.map((f) => "<option ".concat(f === v.freq ? "selected" : "", ">").concat(f, "</option>")).join(""), '</select></td>\n      <td class="amt num">').concat(labCount[l] || 0, '</td><td class="amt num">').concat(fmt(labTot[l] || 0), '</td><td><button class="btn link" data-gotolabel="').concat(esc(l), '">transactions</button></td></tr>')).join(""), '</tbody></table></div>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h2>Automatic rules</h2>\n      <p class="muted" style="margin:0">Every imported transaction is checked against these rules. The first match sets its label, and the label sets the category. Rules with an amount win over rules without one. Labels you typed by hand are kept unless you tick the box below.</p>\n      <form id="addrule" class="formgrid">\n        <label>When<select id="r-field"><option value="any">payee or message</option><option value="payee">payee</option><option value="message">message</option></select></label>\n        <label>contains<input type="text" id="r-text" required placeholder="e.g. K-CITYMARKET"></label>\n        <label>Amount (optional)<input type="text" id="r-amt" inputmode="decimal" placeholder="e.g. -135" autocomplete="off"></label>\n        <label>Direction<select id="r-sign"><option value="">any</option><option value="out">money out</option><option value="in">money in</option></select></label>\n        <label>\u2192 Label<input type="text" id="r-label" list="labels-dl3" required placeholder="new or existing"></label>\n        <label>Category<select id="r-cat"><option value="">keep label\'s category</option>').concat(catOptions(""), '</select></label>\n        <button class="btn primary" type="submit">Add rule</button>\n      </form><datalist id="labels-dl3">').concat(Object.keys(S.cfg.labels).sort().map((l) => '<option value="'.concat(esc(l), '">')).join(""), '</datalist>\n      <div class="row"><button class="btn" data-rerun>Re-apply rules to all transactions</button><label class="row" style="gap:6px"><input type="checkbox" id="rerun-manual"> also replace labels I set by hand</label></div>\n      <div class="tablewrap"><table><thead><tr><th>When</th><th>contains</th><th class="amt">amount</th><th>\u2192 label</th><th class="amt">matches</th><th></th></tr></thead><tbody>\n      ').concat(BudgetLogic.sortedRules(S.cfg).map((r) => {
+      var _a;
+      return "<tr><td>".concat(esc(r.field === "any" ? "payee or message" : r.field)).concat(r.sign ? " (".concat(r.sign === "in" ? "money in" : "money out", ")") : "", '</td><td class="mono">').concat(esc(r.contains), '</td><td class="amt num">').concat(r.amount != null ? fmt(r.amount) : "", "</td><td>").concat(esc(r.label), ' <span class="muted">\xB7 ').concat(esc(((_a = S.cfg.labels[r.label]) == null ? void 0 : _a.cat) || "no category"), '</span></td><td class="amt num">').concat(D.all.filter((t) => BudgetLogic.ruleMatches(r, t)).length, '</td><td><button class="btn small" data-delrule="').concat(esc(r.id), '">Delete</button></td></tr>');
+    }).join(""), "\n      </tbody></table></div>\n    </section>");
+  }
+  const isoD = (d) => "".concat(d.getFullYear(), "-").concat(String(d.getMonth() + 1).padStart(2, "0"), "-").concat(String(d.getDate()).padStart(2, "0"));
+  const TODAY_ISO = isoD(TODAY);
+  const STEP_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 };
+  function addMonths(iso, n, day) {
+    const y = +iso.slice(0, 4), m = +iso.slice(5, 7) - 1 + n;
+    const last = new Date(y, m + 1, 0).getDate();
+    return isoD(new Date(y, m, Math.min(day || +iso.slice(8), last)));
+  }
+  function addDays(iso, n) {
+    const d = /* @__PURE__ */ new Date(iso + "T12:00:00");
+    d.setDate(d.getDate() + n);
+    return isoD(d);
+  }
+  function planOccurrences(p, from, to) {
+    const out = [];
+    if (!p.date) return out;
+    if (!p.repeat || p.repeat === "once") {
+      if (p.date >= from && p.date <= to) out.push(p.date);
+      return out;
+    }
+    if (p.repeat === "weekly") {
+      for (let d = p.date; d <= to && (!p.until || d <= p.until); d = addDays(d, 7)) if (d >= from) out.push(d);
+      return out;
+    }
+    const step = STEP_MONTHS[p.repeat] || 1, day = +p.date.slice(8);
+    for (let i = 0, d = p.date; d <= to && (!p.until || d <= p.until) && i < 400; i++, d = addMonths(p.date, i * step, day)) if (d >= from) out.push(d);
+    return out;
+  }
+  function predicted(from, to, skipLabels) {
+    var _a;
+    const by = {};
+    for (const e of D.E) {
+      if (e.kind !== "expense" && e.kind !== "income") continue;
+      if (!isRegular(e.freq) || skipLabels.has(e.t.label)) continue;
+      const s = by[_a = e.t.label] || (by[_a] = { label: e.t.label, cat: e.cat, freq: e.freq, kind: e.kind, dates: [], amounts: [], months: {} });
+      s.dates.push(e.t.date);
+      s.amounts.push(e.t.amount);
+      const m = e.t.date.slice(0, 7);
+      s.months[m] = (s.months[m] || 0) + e.t.amount;
+    }
+    const out = [];
+    const med = (a) => {
+      const x = [...a].sort((p, q) => p - q);
+      return x.length ? x[Math.floor((x.length - 1) / 2)] : 0;
+    };
+    for (const s of Object.values(by)) {
+      const last = s.dates.sort().slice(-1)[0];
+      const interval = FREQ_DAYS[s.freq];
+      if (addDays(last, Math.round(interval * 2) + 10) < TODAY_ISO) continue;
+      const amount = Math.round((s.freq === "monthly" ? med(Object.values(s.months)) : med(s.amounts)) * 100) / 100;
+      let d = s.freq === "weekly" ? addDays(last, 7) : addMonths(last, STEP_MONTHS[s.freq] || 1);
+      for (let i = 0; d <= to && i < 60; i++) {
+        if (d >= from) out.push({ id: "pred:" + s.label + ":" + d, date: d, amount, label: s.label, cat: s.cat, src: "predicted", freq: s.freq });
+        d = s.freq === "weekly" ? addDays(d, 7) : addMonths(d, STEP_MONTHS[s.freq] || 1);
+      }
+    }
+    return out;
+  }
+  function planItems(from, to) {
+    var _a;
+    const plans = S.cfg.planned || [];
+    const items = [];
+    for (const p of plans) for (const d of planOccurrences(p, from, to))
+      items.push({ id: p.id + ":" + d, planId: p.id, date: d, amount: p.amount, label: p.label, cat: ((_a = S.cfg.labels[p.label]) == null ? void 0 : _a.cat) || (p.amount > 0 ? "Other income" : "Uncategorized"), note: p.note, src: "planned", repeat: p.repeat });
+    if (S.cfg.predictOn !== false) items.push(...predicted(from, to, new Set(plans.map((p) => p.label))));
+    const used = /* @__PURE__ */ new Set();
+    for (const it of items.sort((a, b) => a.date.localeCompare(b.date))) {
+      const hit = D.E.find((e) => !used.has(e.t.id) && e.t.label === it.label && Math.abs(e.t.amount - it.amount) <= Math.max(1, Math.abs(it.amount) * 0.15) && Math.abs((new Date(e.t.date) - new Date(it.date)) / 864e5) <= 12);
+      if (hit) {
+        used.add(hit.t.id);
+        it.paid = hit.t;
+      }
+    }
+    return items;
+  }
+  function vPlan() {
+    const from = addDays(TODAY_ISO, -30), horizon = addMonths("".concat(CUR_YM, "-01"), 6, 1);
+    const to = addDays(horizon, -1);
+    const items = planItems(from, to);
+    const open = items.filter((i) => !i.paid);
+    const next30 = open.filter((i) => i.date >= TODAY_ISO && i.date <= addDays(TODAY_ISO, 30));
+    const overdue = open.filter((i) => i.date < TODAY_ISO);
+    const sumOut = (a) => a.filter((i) => i.amount < 0).reduce((s, i) => s - i.amount, 0);
+    const sumIn = (a) => a.filter((i) => i.amount > 0).reduce((s, i) => s + i.amount, 0);
+    const months = monthsBetween("".concat(CUR_YM, "-01"), to);
+    const byMonth = {};
+    months.forEach((m) => byMonth[m] = {});
+    open.filter((i) => i.amount < 0 && i.date >= TODAY_ISO).forEach((i) => {
+      const m = i.date.slice(0, 7);
+      if (!byMonth[m]) return;
+      const k = i.src === "planned" ? "Planned by you" : "Regular (from history)";
+      byMonth[m][k] = (byMonth[m][k] || 0) - i.amount;
+    });
+    const colorOf = (k) => k === "Planned by you" ? "var(--s2)" : "var(--s1)";
+    const sel = S.selMonth && months.includes(S.selMonth) ? S.selMonth : null;
+    const shortEnd = addDays(addMonths("".concat(CUR_YM, "-01"), 2, 1), -1);
+    const list = items.filter((i) => sel ? i.date.startsWith(sel) : S.planAll || i.date <= shortEnd).sort((a, b) => a.date.localeCompare(b.date));
+    const hidden = !sel && !S.planAll ? items.filter((i) => i.date > shortEnd).length : 0;
+    const groups = {};
+    list.forEach((i) => {
+      var _a;
+      return (groups[_a = i.date.slice(0, 7)] || (groups[_a] = [])).push(i);
+    });
+    const row = (i) => "<tr".concat(i.paid ? ' style="opacity:.6"' : "", '><td class="num" style="white-space:nowrap">').concat(dLabel(i.date), '</td>\n    <td><div class="who">').concat(esc(i.label), '</div><div class="sub">').concat(esc(i.cat)).concat(i.note ? " \xB7 " + esc(i.note) : "", "</div></td>\n    <td>").concat(i.src === "planned" ? '<span class="pill">'.concat(i.repeat && i.repeat !== "once" ? esc(i.repeat) : "one-off", "</span>") : '<span class="pill auto" title="Predicted from your payment history">'.concat(esc(i.freq), " \xB7 history</span>"), "</td>\n    <td>").concat(i.paid ? '<span class="ok">\u2713 paid '.concat(dLabel(i.paid.date), "</span>") : i.date < TODAY_ISO ? '<span class="pill warn">not seen yet</span>' : "", '</td>\n    <td class="amt num ').concat(i.amount > 0 ? "pos" : "", '">').concat(i.amount > 0 ? "+" : "").concat(fmt(i.paid ? i.paid.amount : i.amount)).concat(i.src === "planned" ? ' <button class="del" data-delplan="'.concat(esc(i.planId), '" title="Delete this plan').concat(i.repeat && i.repeat !== "once" ? " (all repeats)" : "", '" aria-label="Delete plan">\xD7</button>') : "", "</td></tr>");
+    return '<div class="tiles">\n      '.concat(tile("Expected out, next 30 days", fmt0(sumOut(next30)), "".concat(next30.filter((i) => i.amount < 0).length, " payments")), "\n      ").concat(tile("Expected in, next 30 days", fmt0(sumIn(next30)), "".concat(next30.filter((i) => i.amount > 0).length, " payments")), "\n      ").concat(tile("Not seen yet", String(overdue.length), overdue.length ? "".concat(fmt0(sumOut(overdue)), " expected in the last 30 days") : "everything expected has arrived"), '\n    </div>\n    <details class="panel" id="planbox" ').concat(S.planOpen ? "open" : "", '><summary>\uFF0B Add an expected expense or income</summary>\n      <form id="planform" class="formgrid" style="margin-top:10px">\n        <label>Date<input type="date" id="p-date" value="').concat(addDays(TODAY_ISO, 7), '" required></label>\n        <label>Direction<select id="p-dir"><option value="out">Expense</option><option value="in">Income</option></select></label>\n        <label>Amount \u20AC<input type="text" id="p-amt" inputmode="decimal" required placeholder="0,00" autocomplete="off"></label>\n        <label>What (label)<input type="text" id="p-label" list="labels-dl4" required placeholder="e.g. HSY - \u0432\u043E\u0434\u0430"></label>\n        <label>Category<select id="p-cat"><option value="">from label / Uncategorized</option>').concat(catOptions(""), '</select></label>\n        <label>Repeats<select id="p-rep"><option value="once">once</option><option value="monthly">monthly</option><option value="quarterly">quarterly</option><option value="yearly">yearly</option><option value="weekly">weekly</option></select></label>\n        <label>Until (optional)<input type="date" id="p-until"></label>\n        <label>Note<input type="text" id="p-note" placeholder="optional"></label>\n        <button class="btn primary" type="submit">Add</button>\n      </form><datalist id="labels-dl4">').concat(Object.keys(S.cfg.labels).sort().map((l) => '<option value="'.concat(esc(l), '">')).join(""), '</datalist>\n      <p class="muted" style="margin:8px 0 0;font-size:12px">When a matching transaction is imported (same label, amount within 15 %, date within 12 days), the item is marked paid automatically.</p>\n    </details>\n    <section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h3>Expected spending, next 6 months</h3>\n        <label class="row" style="gap:6px;font-size:13px"><input type="checkbox" id="predict-on" ').concat(S.cfg.predictOn !== false ? "checked" : "", '> include regular payments from history</label></div>\n      <div class="chartbox">').concat(stackedBars(months, ["Regular (from history)", "Planned by you"], byMonth, colorOf, null, 700, true), '</div>\n      <div class="legend"><span class="row"><i style="background:var(--s1)"></i>Regular (from history)</span><span class="row"><i style="background:var(--s2)"></i>Planned by you</span></div>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <div class="row" style="justify-content:space-between"><h3>Upcoming').concat(sel ? " \xB7 " + ymLong(sel) : " and last 30 days", "</h3>").concat(sel ? '<span class="chip">'.concat(ymLong(sel), '<button data-clearmonth aria-label="Clear month">\xD7</button></span>') : "", "</div>\n      ").concat(list.length ? '<div class="tablewrap"><table><tbody>'.concat(Object.entries(groups).map(([m, a]) => '<tr><th colspan="4">'.concat(ymLong(m), '</th><th class="amt num">').concat(fmt(a.filter((i) => !i.paid).reduce((s, i) => s + i.amount, 0)), "</th></tr>").concat(a.map(row).join(""))).join(""), "</tbody></table></div>") : '<p class="muted">Nothing expected. Add an item above.</p>', "\n      ").concat(hidden ? '<button class="btn" data-planall>Show all 6 months ('.concat(hidden, " more)</button>") : "", '\n      <p class="muted" style="margin:0;font-size:12px">Tap a month in the chart to see only that month.</p>\n    </section>');
+  }
+  const KIND_NAME = { bank: "Bank account", card: "Credit card", cash: "Cash" };
+  function newId(prefix) {
+    return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+  function titleCase(s) {
+    return (s || "").toLowerCase().replace(/(^|[\s-])\S/g, (c) => c.toUpperCase());
+  }
+  function migrate() {
+    const c = S.cfg;
+    c.accounts || (c.accounts = []);
+    c.statements || (c.statements = []);
+    const all = Object.values(S.months).flat();
+    if (!c.accounts.length && all.length) {
+      c.accounts.push({ id: "main", name: "Current account", person: "Me", kind: "bank", iban: "" });
+      markDirty("config");
+    }
+    for (const [ym, a] of Object.entries(S.months)) {
+      let ch = false;
+      a.forEach((t) => {
+        if (!t.acct) {
+          t.acct = c.accounts[0].id;
+          ch = true;
+        }
+      });
+      if (ch) markDirty(ym);
+    }
+    if (!c.statements.length && all.length) {
+      const ds = all.map((t) => t.date).sort();
+      c.statements.push({ id: "s0", acct: c.accounts[0].id, from: ds[0].slice(0, 8) + "01", to: ds[ds.length - 1], file: "Restored data", n: all.length });
+      markDirty("config");
+    }
+    if (!c.v2) {
+      const op = c.categories.find((x) => x.name === "OP card (unitemized)");
+      if (op && op.kind === "expense") {
+        op.kind = "repayment";
+        op.name = "Credit card repayments";
+        Object.values(c.labels).forEach((l) => {
+          if (l.cat === "OP card (unitemized)") l.cat = "Credit card repayments";
+        });
+      }
+      c.v2 = true;
+      markDirty("config");
+    }
+  }
+  function coverageGrid() {
+    const accts = S.cfg.accounts;
+    if (!accts.length) return "";
+    const st = S.cfg.statements;
+    const firsts = st.map((s) => s.from).concat(D.all.map((t) => t.date)).sort();
+    const months = monthsBetween(firsts[0], "".concat(CUR_YM, "-01"));
+    const dim = (ym) => new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate();
+    const cell = (a, ym) => {
+      if (a.kind === "cash") {
+        const n = D.all.filter((t) => t.acct === a.id && t.date.startsWith(ym)).length;
+        return n ? '<span class="c full" title="'.concat(n, ' entries">').concat(n, "</span>") : '<span class="muted">\xB7</span>';
+      }
+      const days = /* @__PURE__ */ new Set();
+      st.filter((s) => s.acct === a.id).forEach((s) => {
+        for (let d = 1; d <= dim(ym); d++) {
+          const ds2 = "".concat(ym, "-").concat(String(d).padStart(2, "0"));
+          if (ds2 >= s.from && ds2 <= s.to) days.add(d);
+        }
+      });
+      const isCur = ym === CUR_YM;
+      const need = isCur ? TODAY.getDate() - 1 : dim(ym);
+      if (!days.size) return '<span class="c none" title="No statement imported">\u2014</span>';
+      if (days.size >= need) return '<span class="c full" title="Covered">\u2713</span>';
+      const ds = [...days].sort((x, y) => x - y);
+      return '<span class="c part" title="Only days '.concat(ds[0], "\u2013").concat(ds[ds.length - 1], ' imported">').concat(ds[0], "\u2013").concat(ds[ds.length - 1], "</span>");
+    };
+    return '<div class="tablewrap"><table class="cov"><thead><tr><th>Account</th>'.concat(months.map((m) => "<th>".concat(ymLabel(m), "</th>")).join(""), "</tr></thead><tbody>\n    ").concat(accts.map((a) => "<tr><td><b>".concat(esc(a.name), '</b><div class="sub">').concat(esc(a.person), " \xB7 ").concat(KIND_NAME[a.kind] || a.kind, "</div></td>").concat(months.map((m) => "<td>".concat(cell(a, m), "</td>")).join(""), "</tr>")).join(""), '\n  </tbody></table></div>\n  <p class="muted" style="margin:0;font-size:12px">\u2713 whole month imported \xB7 numbers = only those days \xB7 \u2014 missing. For cash, the number is how many entries.</p>');
+  }
+  function accountsEditor() {
+    return "<details><summary>Accounts and people (".concat(S.cfg.accounts.length, ')</summary>\n    <p class="muted">Money moved between accounts listed here is not counted as spending or income. Add your family members\' accounts by importing their statements.</p>\n    <div class="tablewrap"><table><thead><tr><th>Name</th><th>Person</th><th>Type</th><th>Account / card number</th><th class="amt">Transactions</th></tr></thead><tbody>\n    ').concat(S.cfg.accounts.map((a) => '<tr><td><input type="text" value="'.concat(esc(a.name), '" data-acctname="').concat(esc(a.id), '" id="an-').concat(esc(a.id), '" aria-label="Account name"></td>\n      <td><input type="text" value="').concat(esc(a.person), '" data-acctperson="').concat(esc(a.id), '" id="ap-').concat(esc(a.id), '" aria-label="Person"></td>\n      <td><select data-acctkind="').concat(esc(a.id), '" aria-label="Type">').concat(Object.entries(KIND_NAME).map(([k, n]) => '<option value="'.concat(k, '" ').concat(k === a.kind ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select></td>\n      <td><input type="text" value="').concat(esc(a.iban), '" data-acctiban="').concat(esc(a.id), '" id="ai-').concat(esc(a.id), '" aria-label="Account number" placeholder="FI.."></td>\n      <td class="amt num">').concat(D.all.filter((t) => t.acct === a.id).length, "</td></tr>")).join(""), "\n    </tbody></table></div></details>");
+  }
+  function guessAccount(row) {
+    const ib = normIban(row.account);
+    const byIban = ib && S.cfg.accounts.find((a) => normIban(a.iban) === ib);
+    if (byIban) return byIban.id;
+    const raw = new Set(row.txns.map((t) => t.id));
+    const hit = D.all.find((t) => raw.has(t.raw || t.id));
+    if (hit) return hit.acct;
+    return "new";
+  }
+  function rowPlan(row, queued) {
+    const acct = row.acct;
+    const have = new Set(D.all.filter((t) => t.acct === acct).map((t) => t.raw || t.id));
+    const fresh = [], seen = queued || /* @__PURE__ */ new Set();
+    let dups = 0;
+    for (const t of row.txns) {
+      const k = "".concat(acct, "|").concat(t.id);
+      if (have.has(t.id) || seen.has(k)) dups++;
+      else {
+        fresh.push(t);
+        seen.add(k);
+      }
+    }
+    return { fresh, dups };
   }
   function vImport() {
     const imp = S.imports;
-    const newTotal = imp.reduce((s, r) => {
-      var _a;
-      return s + (((_a = r.fresh) == null ? void 0 : _a.length) || 0);
-    }, 0);
-    return '<section class="panel" style="display:grid;gap:14px">\n      <h2>Import bank statements</h2>\n      <label class="drop" id="drop" for="file"><b>Drop OP statement PDFs or CSV exports here</b><span class="muted">or click to choose files \xB7 read in your browser, nothing is uploaded until you save</span>\n        <input type="file" id="file" accept=".pdf,.csv,.txt,application/pdf,text/csv" multiple hidden></label>\n      '.concat(imp.length ? '<div class="tablewrap"><table><thead><tr><th>File</th><th>Period</th><th class="amt">Rows</th><th>Check against statement totals</th><th class="amt">New</th><th class="amt">Already saved</th></tr></thead><tbody>\n        '.concat(imp.map((r) => {
-      var _a;
-      return "<tr><td>".concat(esc(r.name), "</td><td>").concat(esc(r.period || ""), '</td><td class="amt num">').concat(r.error ? "" : r.txns.length, "</td>\n        <td>").concat(r.error ? '<span class="bad">'.concat(esc(r.error), "</span>") : r.check, '</td><td class="amt num">').concat(r.fresh ? r.fresh.length : "", '</td><td class="amt num">').concat((_a = r.dups) != null ? _a : "", "</td></tr>");
-    }).join(""), '\n        </tbody></table></div>\n        <div class="row"><button class="btn primary" data-doimport ').concat(newTotal ? "" : "disabled", ">Add ").concat(newTotal, " new transaction").concat(newTotal === 1 ? "" : "s", '</button><button class="btn" data-clearimport>Clear list</button></div>') : "", '\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h3>Backup</h3>\n      <p class="muted" style="margin:0">Your data is saved with this page').concat(S.store === "db" ? " and only you can read it" : S.store === "local" ? " in this browser only" : "", ". ").concat(D.all.length, " transactions over ").concat(D.allMonths.length, ' months.</p>\n      <div class="row"><button class="btn" data-export>Download backup (JSON)</button>\n      <label class="btn" for="restore">Restore from backup\u2026</label><input type="file" id="restore" accept=".json,application/json" hidden></div>\n    </section>');
+    const queued = /* @__PURE__ */ new Set();
+    const plans = imp.map((r) => r.error ? null : rowPlan(r, queued));
+    const newTotal = plans.reduce((s, x) => s + (x ? x.fresh.length : 0), 0);
+    const acctOpts = (sel) => S.cfg.accounts.filter((a) => a.kind !== "cash").map((a) => '<option value="'.concat(esc(a.id), '" ').concat(a.id === sel ? "selected" : "", ">").concat(esc(a.name), " (").concat(esc(a.person), ")</option>")).join("") + '<option value="new" '.concat(sel === "new" ? "selected" : "", ">\uFF0B New account\u2026</option>");
+    const cards = imp.map((r, i) => {
+      if (r.error) return '<div class="impcard"><b>'.concat(esc(r.name), '</b><span class="bad">').concat(esc(r.error), "</span></div>");
+      const pl = plans[i];
+      const sign = r.flip ? -1 : 1;
+      return '<div class="impcard">\n      <div class="row" style="justify-content:space-between"><b style="word-break:break-all">'.concat(esc(r.name), '</b><span class="muted num">').concat(r.from ? dLabel(r.from) + " \u2013 " + dLabel(r.to) : "", "</span></div>\n      <div>").concat(r.check).concat(r.account ? ' <span class="muted">\xB7 '.concat(esc(r.account), "</span>") : "").concat(r.holder ? ' <span class="muted">\xB7 '.concat(esc(r.holder), "</span>") : "", '</div>\n      <div class="formgrid">\n        <label>Account<select data-imp-acct="').concat(i, '">').concat(acctOpts(r.acct), "</select></label>\n        ").concat(r.acct === "new" ? '<label>Account name<input type="text" data-imp-name="'.concat(i, '" id="imn-').concat(i, '" value="').concat(esc(r.newName), '"></label>\n          <label>Whose<input type="text" data-imp-person="').concat(i, '" id="imp-').concat(i, '" value="').concat(esc(r.newPerson), '" list="people-dl"></label>\n          <label>Type<select data-imp-kind="').concat(i, '"><option value="bank" ').concat(r.newKind === "bank" ? "selected" : "", '>Bank account</option><option value="card" ').concat(r.newKind === "card" ? "selected" : "", ">Credit card</option></select></label>") : "", "\n        ").concat(r.format !== "op" ? '<label class="chk"><input type="checkbox" data-imp-flip="'.concat(i, '" ').concat(r.flip ? "checked" : "", "> purchases are shown as plus amounts</label>") : "", '\n      </div>\n      <div class="row muted num"><span><b style="color:var(--ink)">').concat(pl.fresh.length, "</b> new</span><span>").concat(pl.dups, ' already saved</span></div>\n      <details><summary>Preview</summary><div class="tablewrap"><table><tbody>').concat(r.txns.slice(0, 8).map((t) => '<tr><td class="num">'.concat(dLabel(t.date), "</td><td>").concat(esc(t.payee), '</td><td class="amt num">').concat(fmt(t.amount * sign), "</td></tr>")).join(""), "</tbody></table></div>").concat(r.txns.length > 8 ? '<p class="muted">\u2026and '.concat(r.txns.length - 8, " more</p>") : "", "</details>\n    </div>");
+    }).join("");
+    const people = [...new Set(S.cfg.accounts.map((a) => a.person).filter(Boolean))];
+    return '<section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Months imported</h2></div>\n      '.concat(coverageGrid() || '<p class="muted">Nothing imported yet.</p>', "\n      ").concat(accountsEditor(), '\n    </section>\n    <section class="panel" style="display:grid;gap:14px">\n      <h2>Add statements</h2>\n      <label class="drop" id="drop" for="file"><b>Choose bank or credit card statements</b><span class="muted">PDF from OP, or CSV exports \xB7 yours or a family member\'s \xB7 read on this device only</span>\n        <span class="btn primary">Choose files</span>\n        <input type="file" id="file" accept=".pdf,.csv,.txt,application/pdf,text/csv" multiple hidden></label>\n      ').concat(cards, '<datalist id="people-dl">').concat(people.map((x) => '<option value="'.concat(esc(x), '">')).join(""), "</datalist>\n      ").concat(imp.length ? '<div class="row"><button class="btn primary" data-doimport '.concat(newTotal ? "" : "disabled", ">Add ").concat(newTotal, " new transaction").concat(newTotal === 1 ? "" : "s", '</button><button class="btn" data-clearimport>Clear list</button></div>') : "", '\n      <p class="muted" style="margin:0;font-size:12px">Credit card statements: once a month\'s card purchases are imported, the repayments to the card from your bank account stop counting as spending for that month, so nothing is counted twice.</p>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h3>Backup</h3>\n      <p class="muted" style="margin:0">Your data is saved ').concat(S.store === "db" ? "with this page and only you can read it" : S.store === "local" ? "in this browser on this device only" : "nowhere (preview)", ". ").concat(D.all.length, " transactions over ").concat(D.allMonths.length, ' months.</p>\n      <div class="row"><button class="btn" data-export>Download backup (JSON)</button>\n      <label class="btn" for="restore">Restore from backup\u2026</label><input type="file" id="restore" accept=".json,application/json" hidden></div>\n    </section>');
   }
   function bindDrop() {
     const dz = $("#drop");
@@ -798,7 +1205,7 @@ details summary{cursor:pointer;font-weight:600}
     });
   }
   async function pdfPages(buf) {
-    if (!window.pdfjsLib) throw new Error("PDF reader did not load");
+    if (!window.pdfjsLib) throw new Error("The PDF reader did not load. Connect to the internet once and reopen the app.");
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false }).promise;
     const pages = [];
     for (let p = 1; p <= doc.numPages; p++) {
@@ -808,27 +1215,28 @@ details summary{cursor:pointer;font-weight:600}
     return pages;
   }
   async function handleFiles(files) {
-    const existing = new Set(D.all.map((t) => t.id));
-    const queued = new Set(S.imports.flatMap((r) => (r.fresh || []).map((t) => t.id)));
+    var _a;
     for (const f of files) {
       const row = { name: f.name };
       try {
         let res;
         if (/\.pdf$/i.test(f.name) || f.type === "application/pdf") res = StatementParser.parseStatement(await pdfPages(await f.arrayBuffer()));
         else res = StatementParser.parseCSV(await f.text());
-        if (!res.txns.length) throw new Error("No transactions found in this file");
-        row.txns = res.txns;
-        row.period = res.period || "".concat(res.txns[res.txns.length - 1].date, " \u2013 ").concat(res.txns[0].date);
+        if (!res.txns.length) throw new Error("No transactions found in this file. Send it to Claude so the reader can be taught this format.");
+        Object.assign(row, { format: res.format, account: res.account, holder: res.holder, from: res.from, to: res.to });
+        row.txns = res.txns.map((t) => ({ id: t.id, date: t.date, amount: t.amount, type: t.type, payee: t.payee, message: t.message || t.extra || "", iban: t.iban || "", ref: t.reference || "" }));
         const s = res.summary, sum = (a) => Math.round(a.reduce((x, t) => x + t.amount, 0) * 100) / 100;
         const dep = res.txns.filter((t) => t.amount > 0), wd = res.txns.filter((t) => t.amount < 0);
         if (s.depositCount != null) {
           const ok = dep.length === s.depositCount && wd.length === s.withdrawalCount && sum(dep) === s.deposits && sum(wd) === s.withdrawals;
-          row.check = ok ? '<span class="ok">\u2713 matches</span> <span class="muted num">'.concat(dep.length, " in ").concat(fmt(sum(dep)), ", ").concat(wd.length, " out ").concat(fmt(sum(wd)), "</span>") : '<span class="bad">\u2717 mismatch</span> <span class="muted num">read '.concat(dep.length, "/").concat(wd.length, ", statement says ").concat(s.depositCount, "/").concat(s.withdrawalCount, "</span>");
-        } else row.check = '<span class="muted">no totals in file</span>';
-        const clean = res.txns.map((t) => ({ id: t.id, date: t.date, amount: t.amount, type: t.type, payee: t.payee, message: t.message || t.extra || "", iban: t.iban || "", ref: t.reference || "" }));
-        row.fresh = clean.filter((t) => !existing.has(t.id) && !queued.has(t.id));
-        row.fresh.forEach((t) => queued.add(t.id));
-        row.dups = clean.length - row.fresh.length;
+          row.check = ok ? '<span class="ok">\u2713 matches statement totals</span>' : '<span class="bad">\u2717 totals differ</span> <span class="muted num">read '.concat(dep.length, " in / ").concat(wd.length, " out, statement says ").concat(s.depositCount, " / ").concat(s.withdrawalCount, "</span>");
+        } else row.check = '<span class="muted">'.concat(res.txns.length, " rows read \xB7 check the preview</span>");
+        row.flip = res.format !== "op" && dep.length > wd.length;
+        row.acct = guessAccount(row);
+        const isCard = res.format === "generic" || /\*{2,}/.test(res.account || "");
+        row.newKind = isCard ? "card" : "bank";
+        row.newPerson = titleCase((res.holder || "").split(" ").slice(-1)[0]) || (((_a = S.cfg.accounts[0]) == null ? void 0 : _a.person) || "Me");
+        row.newName = isCard ? "Credit card ".concat(row.newPerson) : "".concat(row.newPerson, " \u2013 ").concat(res.account ? res.account.slice(-5) : "account");
       } catch (e) {
         row.error = e.message || "Could not read this file";
       }
@@ -838,23 +1246,41 @@ details summary{cursor:pointer;font-weight:600}
   }
   function doImport() {
     var _a;
-    const fresh = S.imports.flatMap((r) => r.fresh || []);
-    BudgetLogic.relabel(fresh, S.cfg);
-    for (const t of fresh) {
-      const ym = t.date.slice(0, 7);
-      ((_a = S.months)[ym] || (_a[ym] = [])).push(t);
-      markDirty(ym);
+    const queued = /* @__PURE__ */ new Set();
+    let n = 0;
+    const added = [];
+    for (const r of S.imports) {
+      if (r.error) continue;
+      if (r.acct === "new") {
+        const a2 = { id: newId("a"), name: r.newName || "Account", person: (r.newPerson || "Me").trim(), kind: r.newKind, iban: r.account || "" };
+        S.cfg.accounts.push(a2);
+        r.acct = a2.id;
+      }
+      const a = S.cfg.accounts.find((x) => x.id === r.acct);
+      if (a && !a.iban && r.account) a.iban = r.account;
+      const { fresh } = rowPlan(r, queued);
+      const sign = r.flip ? -1 : 1;
+      const txs = fresh.map((t) => Object.assign({}, t, { raw: t.id, id: "".concat(r.acct, ":").concat(t.id), acct: r.acct, amount: Math.round(t.amount * sign * 100) / 100 }));
+      BudgetLogic.relabel(txs, S.cfg);
+      for (const t of txs) {
+        const ym = t.date.slice(0, 7);
+        ((_a = S.months)[ym] || (_a[ym] = [])).push(t);
+        markDirty(ym);
+        added.push(t);
+      }
+      if (r.from) S.cfg.statements.push({ id: newId("s"), acct: r.acct, from: r.from, to: r.to, file: r.name, n: txs.length });
+      n += txs.length;
     }
+    markDirty("config");
     Object.values(S.months).forEach((a) => a.sort((x, y) => x.date.localeCompare(y.date)));
-    const n = fresh.length;
     S.imports = [];
     derive();
-    const uns = fresh.filter((t) => !S.cfg.labels[t.label]).length;
+    const uns = added.filter((t) => !S.cfg.labels[t.label]).length;
     toast("Added ".concat(n, " transactions").concat(uns ? " \xB7 ".concat(uns, " need a category") : ""));
     if (uns) {
       S.view = "tx";
       S.tx = { q: "", ym: "", cat: "", only: "unsorted" };
-    } else S.view = "overview";
+    }
     render();
   }
   function txById(id) {
@@ -977,7 +1403,8 @@ details summary{cursor:pointer;font-weight:600}
     toastT = setTimeout(() => el.hidden = true, 3200);
   }
   document.addEventListener("click", async (e) => {
-    const el = e.target.closest("[data-showall],[data-tab],[data-dim],[data-reg],[data-drill],[data-crumb],[data-month],[data-clearmonth],[data-apply],[data-txonly],[data-gotolabel],[data-gotogroup],[data-delrule],[data-doimport],[data-clearimport],[data-export]");
+    var _a;
+    const el = e.target.closest("[data-showall],[data-tab],[data-dim],[data-reg],[data-drill],[data-crumb],[data-month],[data-clearmonth],[data-apply],[data-txonly],[data-gotolabel],[data-gotogroup],[data-delrule],[data-doimport],[data-clearimport],[data-export],[data-deltx],[data-rerun],[data-person],[data-delplan],[data-planall]");
     if (!el) return;
     const d = el.dataset;
     if ("showall" in d) {
@@ -1059,6 +1486,48 @@ details summary{cursor:pointer;font-weight:600}
       S.imports = [];
       return render();
     }
+    if ("person" in d) {
+      S.person = d.person;
+      return render();
+    }
+    if ("planall" in d) {
+      S.planAll = true;
+      return render();
+    }
+    if (d.delplan) {
+      S.cfg.planned = (S.cfg.planned || []).filter((x) => x.id !== d.delplan);
+      markDirty("config");
+      toast("Plan deleted");
+      return render();
+    }
+    if (d.deltx) {
+      for (const [ym, a] of Object.entries(S.months)) {
+        const i = a.findIndex((t) => t.id === d.deltx);
+        if (i >= 0) {
+          a.splice(i, 1);
+          markDirty(ym);
+        }
+      }
+      toast("Entry deleted");
+      return render();
+    }
+    if ("rerun" in d) {
+      const all = !!((_a = $("#rerun-manual")) == null ? void 0 : _a.checked);
+      let n = 0;
+      for (const [ym, a] of Object.entries(S.months)) {
+        const before = a.map((t) => t.label);
+        if (all) a.forEach((t) => {
+          if (t.src !== "manual") t.manual = false;
+        });
+        BudgetLogic.relabel(a, S.cfg);
+        a.forEach((t, i) => {
+          if (t.label !== before[i]) n++;
+        });
+        markDirty(ym);
+      }
+      toast("Rules applied \xB7 ".concat(n, " transaction").concat(n === 1 ? "" : "s", " changed"));
+      return render();
+    }
     if ("export" in d) {
       const data = JSON.stringify({ exported: (/* @__PURE__ */ new Date()).toISOString(), cfg: S.cfg, months: S.months }, null, 1);
       try {
@@ -1079,11 +1548,48 @@ details summary{cursor:pointer;font-weight:600}
     }
   });
   document.addEventListener("change", async (e) => {
-    var _a;
+    var _a, _b, _c, _d;
     const el = e.target, d = el.dataset;
     if (el.id === "period") {
       S.period = el.value;
       S.selMonth = null;
+      return render();
+    }
+    if (el.id === "predict-on") {
+      S.cfg.predictOn = el.checked;
+      markDirty("config");
+      return render();
+    }
+    if (el.id === "person") {
+      S.person = el.value;
+      S.drill = { group: null, category: null, label: null };
+      return render();
+    }
+    if (d.impAcct !== void 0) {
+      S.imports[+d.impAcct].acct = el.value;
+      return render();
+    }
+    if (d.impName !== void 0) {
+      S.imports[+d.impName].newName = el.value;
+      return;
+    }
+    if (d.impPerson !== void 0) {
+      S.imports[+d.impPerson].newPerson = el.value;
+      return;
+    }
+    if (d.impKind !== void 0) {
+      S.imports[+d.impKind].newKind = el.value;
+      return;
+    }
+    if (d.impFlip !== void 0) {
+      S.imports[+d.impFlip].flip = el.checked;
+      return render();
+    }
+    const acctField = [["acctname", "name"], ["acctperson", "person"], ["acctkind", "kind"], ["acctiban", "iban"]].find(([k]) => d[k] !== void 0);
+    if (acctField) {
+      const a = S.cfg.accounts.find((x) => x.id === d[acctField[0]]);
+      a[acctField[1]] = el.value.trim();
+      markDirty("config");
       return render();
     }
     if (el.id === "file") return handleFiles([...el.files]);
@@ -1094,6 +1600,10 @@ details summary{cursor:pointer;font-weight:600}
         const old = Object.keys(S.months);
         S.cfg = v.cfg;
         S.months = v.months;
+        (_a = S.cfg).labels || (_a.labels = {});
+        (_b = S.cfg).rules || (_b.rules = []);
+        (_c = S.cfg).categories || (_c.categories = []);
+        migrate();
         [.../* @__PURE__ */ new Set([...old, ...Object.keys(v.months)])].forEach(markDirty);
         markDirty("config");
         toast("Backup restored");
@@ -1130,7 +1640,7 @@ details summary{cursor:pointer;font-weight:600}
     if (d.catgroup) {
       if (el.value === "__new") {
         el.outerHTML = '<input type="text" data-newgroupfor="'.concat(esc(d.catgroup), '" placeholder="Group name, then Enter" aria-label="New group name" id="ng-').concat(esc(d.catgroup), '">');
-        (_a = document.getElementById("ng-" + d.catgroup)) == null ? void 0 : _a.focus();
+        (_d = document.getElementById("ng-" + d.catgroup)) == null ? void 0 : _d.focus();
         return;
       }
       S.cfg.categories.find((c) => c.name === d.catgroup).group = el.value;
@@ -1159,8 +1669,84 @@ details summary{cursor:pointer;font-weight:600}
       }, 250);
     }
   });
+  document.addEventListener("toggle", (e) => {
+    if (e.target.id === "cashbox") S.cashOpen = e.target.open;
+    if (e.target.id === "planbox") S.planOpen = e.target.open;
+  }, true);
   document.addEventListener("submit", (e) => {
-    if (e.target.id !== "addcat") return;
+    var _a, _b;
+    const id = e.target.id;
+    if (id === "cashform") {
+      e.preventDefault();
+      const amt = Math.abs(parseFloat(String($("#c-amt").value).replace(",", ".")));
+      if (!amt) return toast("Enter an amount");
+      const desc = $("#c-desc").value.trim();
+      const label = $("#c-label").value.trim() || desc;
+      const cat = $("#c-cat").value;
+      let acct = $("#c-acct").value;
+      if (acct.startsWith("new:")) {
+        const person = acct.slice(4);
+        const a = { id: newId("a"), name: "Cash \u2013 ".concat(person), person, kind: "cash", iban: "" };
+        S.cfg.accounts.push(a);
+        acct = a.id;
+      }
+      const t = { id: newId("m"), date: $("#c-date").value, amount: $("#c-dir").value === "in" ? amt : -amt, type: "CASH", payee: desc, message: "", iban: "", acct, label, manual: true, src: "manual" };
+      if (cat) S.cfg.labels[label] = Object.assign(S.cfg.labels[label] || { freq: null }, { cat });
+      const ym = t.date.slice(0, 7);
+      ((_a = S.months)[ym] || (_a[ym] = [])).push(t);
+      S.months[ym].sort((x, y) => x.date.localeCompare(y.date));
+      markDirty(ym);
+      markDirty("config");
+      S.cashOpen = true;
+      toast("Added ".concat(fmt(t.amount), " \xB7 ").concat(label));
+      return render();
+    }
+    if (id === "planform") {
+      e.preventDefault();
+      const amt = Math.abs(parseFloat(String($("#p-amt").value).replace(/\s/g, "").replace(",", ".")));
+      if (!amt) return toast("Enter an amount");
+      const label = $("#p-label").value.trim(), cat = $("#p-cat").value;
+      const pl = { id: newId("p"), date: $("#p-date").value, amount: $("#p-dir").value === "in" ? amt : -amt, label, repeat: $("#p-rep").value, until: $("#p-until").value || null, note: $("#p-note").value.trim() };
+      ((_b = S.cfg).planned || (_b.planned = [])).push(pl);
+      if (cat) S.cfg.labels[label] = Object.assign(S.cfg.labels[label] || { freq: null }, { cat });
+      markDirty("config");
+      S.planOpen = true;
+      toast("Planned ".concat(fmt(pl.amount), " \xB7 ").concat(label));
+      return render();
+    }
+    if (id === "addrule") {
+      e.preventDefault();
+      const label = $("#r-label").value.trim(), text = $("#r-text").value.trim(), cat = $("#r-cat").value;
+      const amtS = $("#r-amt").value;
+      const amount = amtS === "" ? null : parseFloat(amtS.replace(",", "."));
+      if (!label || !text) return;
+      S.cfg.rules.push({ id: newId("r"), field: $("#r-field").value, contains: text, label, amount: isFinite(amount) ? amount : null, sign: $("#r-sign").value || null });
+      if (cat) S.cfg.labels[label] = Object.assign(S.cfg.labels[label] || { freq: null }, { cat });
+      let n = 0;
+      for (const [ym, a] of Object.entries(S.months)) {
+        const before = a.map((t) => t.label);
+        BudgetLogic.relabel(a, S.cfg);
+        a.forEach((t, i) => {
+          if (t.label !== before[i]) {
+            n++;
+            markDirty(ym);
+          }
+        });
+      }
+      markDirty("config");
+      toast("Rule added \xB7 ".concat(n, " transaction").concat(n === 1 ? "" : "s", " relabeled"));
+      return render();
+    }
+    if (id === "addlabel") {
+      e.preventDefault();
+      const name2 = $("#nl-name").value.trim();
+      if (!name2) return;
+      S.cfg.labels[name2] = { cat: $("#nl-cat").value, freq: $("#nl-freq").value || null };
+      markDirty("config");
+      toast("Label \u201C".concat(name2, "\u201D added"));
+      return render();
+    }
+    if (id !== "addcat") return;
     e.preventDefault();
     const name = $("#newcat").value.trim();
     let group = $("#newcatgroup").value;
