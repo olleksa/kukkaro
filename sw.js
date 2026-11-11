@@ -1,5 +1,5 @@
 // Kukkaro offline cache: app shell + PDF reader. Bump VERSION after updating index.html.
-const VERSION = 'kukkaro-v3';
+const VERSION = 'kukkaro-7.2-2611111732';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
   'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'];

@@ -72,6 +72,9 @@ h3{font-size:14px;margin:0;text-transform:uppercase;letter-spacing:.06em;color:v
 .tile .k{font-size:12px;color:var(--ink-3);font-weight:600}
 .tile .v{font:600 22px var(--mono);letter-spacing:-.02em}
 .tile .s{font-size:12px;color:var(--ink-3)}
+.tilebtn{text-align:left;cursor:pointer;font:inherit;color:inherit}
+.tilebtn:hover{border-color:var(--line-strong)}
+.tilebtn.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden}
 .seg button{border:0;background:var(--surface);padding:6px 10px;cursor:pointer;color:var(--ink-2);font-weight:600;font-size:13px}
@@ -133,6 +136,38 @@ td select{max-width:190px}
 details summary{cursor:pointer;font-weight:600}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
 .savestate{font-size:12px;color:var(--ink-3)}
+@media (max-width:640px){
+  .txt thead{display:none}
+  .txt tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"d a" "p p" "l c" "r r";gap:4px 8px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .txt td{border:0;padding:0;min-width:0}
+  .txt td:nth-child(1){grid-area:d;color:var(--ink-3);font-size:12px}
+  .txt td:nth-child(2){grid-area:p}
+  .txt td:nth-child(3){grid-area:a}
+  .txt td:nth-child(4){grid-area:l}
+  .txt td:nth-child(5){grid-area:c;text-align:right}
+  .txt td:nth-child(6){grid-area:r}
+  .txt td:nth-child(6) select{font-size:12px;padding:3px 6px}
+  .txt .who,.txt .sub{max-width:none;white-space:normal}
+  .txt .pickbtn{max-width:100%}
+}
+.pickbtn{border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;padding:5px 8px;cursor:pointer;text-align:left;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.pickbtn span{color:var(--ink-3);font-weight:400}
+.pickbtn.need{border-style:dashed;border-color:var(--warn);color:var(--warn)}
+.sheet-back{position:fixed;inset:0;background:rgba(10,16,24,.45);z-index:30}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:var(--surface);border-radius:16px 16px 0 0;max-height:86vh;display:flex;flex-direction:column;gap:10px;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-shadow:0 -8px 30px rgba(0,0,0,.2)}
+@media (min-width:700px){.sheet{left:50%;right:auto;bottom:auto;top:8vh;transform:translateX(-50%);width:560px;border-radius:14px;max-height:84vh}}
+.sheet input[type=search]{width:100%;font-size:16px;padding:10px}
+.pk-list{overflow:auto;display:grid;gap:2px;align-content:start;flex:1;min-height:0}
+.sheet > *{flex:none}
+.sheet > .pk-list{flex:1 1 auto}
+.sheet .sub{white-space:normal}
+.pk-chk{display:flex;align-items:flex-start;gap:8px;font-size:13px}
+.pk-chk input{margin-top:2px;flex:none}
+.pk-item{display:flex;justify-content:space-between;gap:10px;border:0;background:none;text-align:left;padding:10px 8px;border-radius:8px;cursor:pointer;font:inherit;color:inherit;border-bottom:1px solid var(--line)}
+.pk-item:hover{background:var(--surface-2)}
+.pk-item .muted{font-size:12px;white-space:nowrap}
+.pk-new{border:1px dashed var(--accent);border-radius:10px;padding:10px;display:grid;gap:8px;background:var(--accent-soft)}
 .cov td,.cov th{text-align:center;padding:4px 6px;font-size:12px}
 .cov td:first-child,.cov th:first-child{text-align:left;white-space:nowrap}
 .cov .c{display:inline-block;min-width:34px;padding:2px 4px;border-radius:6px;font-weight:700}
@@ -154,7 +189,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
 
 <header class="top">
   <div class="wrap topbar">
-    <div class="brand"><b>Kukkaro</b><span id="acct">household money</span></div>
+    <div class="brand"><b>Kukkaro</b><span id="acct" title="Version 7.2, built 11.11.2026 17:32">household money · v7.2 · 261111.1732</span></div>
     <div class="period">
       <label class="muted" for="period">Period</label>
       <select id="period">
@@ -483,22 +518,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
   const isRegular = (f) => f && f !== "irregular";
   const TODAY = /* @__PURE__ */ new Date();
   const CUR_YM = "".concat(TODAY.getFullYear(), "-").concat(String(TODAY.getMonth() + 1).padStart(2, "0"));
-  const DEFAULT_CFG = { version: 1, labels: {}, rules: [], categories: [
-    ["Salary", "Income", "income"],
-    ["Other income", "Income", "income"],
-    ["Rent", "Housing"],
-    ["Electricity", "Housing"],
-    ["Water & waste", "Housing"],
-    ["Groceries", "Food"],
-    ["Insurance", "Insurance"],
-    ["Phone & internet", "Subscriptions"],
-    ["Apps & subscriptions", "Subscriptions"],
-    ["Public transport", "Transport"],
-    ["Shopping", "Shopping"],
-    ["Bank fees", "Fees & official"],
-    ["Uncategorized", "Other"],
-    ["Own transfers", "Transfers", "transfer"]
-  ].map(([name, group, kind = "expense"]) => ({ name, group, kind })) };
+  const DEFAULT_CFG = { version: 1, labels: {}, rules: [], categories: [] };
   const S = {
     cfg: null,
     months: {},
@@ -513,7 +533,10 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     imports: [],
     loaded: false,
     store: "memory",
-    person: ""
+    person: "",
+    open: {},
+    flow: "expense",
+    netOpen: false
   };
   try {
     const v = localStorage.getItem("kukkaro.view");
@@ -668,13 +691,14 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
         group = "Transfers";
         note = "goes to another account you track";
       }
-      if ((a == null ? void 0 : a.kind) === "card" && t.amount > 0 && !li && /suoritus|payment|maksu|kiitos|inbetal|repay/i.test("".concat(t.payee, " ").concat(t.message))) {
+      if ((a == null ? void 0 : a.kind) === "card" && t.amount > 0 && kind !== "expense") {
         kind = "transfer";
         cat = "Card repayment received";
         group = "Transfers";
+        note = "money paid into the card";
       }
       const fSet = (li == null ? void 0 : li.freq) || null;
-      return { t, a, person: (a == null ? void 0 : a.person) || "", cat, group, kind, note, freq: fSet || autoFreq[t.label] || "irregular", freqAuto: !fSet, unsorted: !li };
+      return { t, a, person: (a == null ? void 0 : a.person) || "", cat, group, kind, note, freq: fSet || autoFreq[t.label] || "irregular", freqAuto: !fSet, unsorted: !li && kind !== "transfer" };
     };
     const people = [...new Set((cfg.accounts || []).map((a) => a.person).filter(Boolean))];
     if (S.person && !people.includes(S.person)) S.person = "";
@@ -738,6 +762,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       return;
     }
     m.innerHTML = { overview: vOverview, regular: vRegular, plan: vPlan, tx: vTx, cats: vCats, import: vImport }[S.view]();
+    renderSheet();
     if (S.view === "import") bindDrop();
   }
   function emptyState() {
@@ -754,7 +779,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     return true;
   }
   function level() {
-    return S.drill.label ? "label" : S.drill.category ? "label" : S.drill.group ? "category" : S.dim;
+    return S.drill.label ? "label" : S.drill.category ? "label" : S.drill.group ? "category" : S.flow === "income" && S.dim === "group" ? "category" : S.dim;
   }
   const keyOf = (e, lv) => lv === "group" ? e.group : lv === "category" ? e.cat : e.t.label;
   function vOverview() {
@@ -768,17 +793,20 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     const avgSpend = sum(fExp, spend) / nFull, avgInc = sum(fInc, (e) => e.t.amount) / nFull;
     const avgReg = sum(fExp.filter((e) => isRegular(e.freq)), spend) / nFull;
     const partial = months.includes(CUR_YM);
-    const tiles = '<div class="tiles">\n    '.concat(tile("Income / month", fmt0(avgInc), "avg of ".concat(nFull, " full month").concat(nFull > 1 ? "s" : "")), "\n    ").concat(tile("Spending / month", fmt0(avgSpend), "transfers to own accounts excluded"), "\n    ").concat(tile("Regular / month", fmt0(avgReg), "".concat(Math.round(avgReg / (avgSpend || 1) * 100), " % of spending")), "\n    ").concat(tile("Irregular / month", fmt0(avgSpend - avgReg), "one-offs and occasional"), "\n    ").concat(tile("Net / month", (avgInc - avgSpend >= 0 ? "+" : "") + fmt0(avgInc - avgSpend), "income minus spending"), "\n    ").concat((() => {
+    const on = (k) => k === "income" && S.flow === "income" || S.flow === "expense" && (k === "spend" && S.reg === "all" || k === "reg" && S.reg === "regular" || k === "irr" && S.reg === "irregular") || k === "net" && S.netOpen;
+    const tb = (key, k, v, s) => '<button class="tile tilebtn'.concat(on(key) ? " on" : "", '" data-tile="').concat(key, '"><span class="k">').concat(k, '</span><span class="v">').concat(v, '</span><span class="s">').concat(s, " \u203A</span></button>");
+    const tiles = '<div class="tiles">\n    '.concat(tb("income", "Income / month", fmt0(avgInc), "avg of ".concat(nFull, " full month").concat(nFull > 1 ? "s" : "")), "\n    ").concat(tb("spend", "Spending / month", fmt0(avgSpend), "own transfers excluded"), "\n    ").concat(tb("reg", "Regular / month", fmt0(avgReg), "".concat(Math.round(avgReg / (avgSpend || 1) * 100), " % of spending")), "\n    ").concat(tb("irr", "Irregular / month", fmt0(avgSpend - avgReg), "one-offs and occasional"), "\n    ").concat(tb("net", "Net / month", (avgInc - avgSpend >= 0 ? "+" : "") + fmt0(avgInc - avgSpend), "month by month"), "\n    ").concat((() => {
       const nx = planItems(TODAY_ISO, addDays(TODAY_ISO, 30)).filter((i) => !i.paid && i.amount < 0);
-      return '<button class="tile" data-tab="plan" style="text-align:left;cursor:pointer;font:inherit;color:inherit"><span class="k">Expected next 30 days</span><span class="v">'.concat(fmt0(nx.reduce((s, i) => s - i.amount, 0)), '</span><span class="s">').concat(nx.length, " payments \xB7 open plan \u203A</span></button>");
+      return '<button class="tile tilebtn" data-tab="plan"><span class="k">Expected next 30 days</span><span class="v">'.concat(fmt0(nx.reduce((s, i) => s - i.amount, 0)), '</span><span class="s">').concat(nx.length, " payments \xB7 open plan \u203A</span></button>");
     })(), "\n  </div>");
     const lv = level();
-    const rows = exp.filter(drillFilter);
-    const allRows = D.E.filter((e) => e.kind === "expense" && drillFilter(e));
+    const flow = S.flow, val = (e) => flow === "income" ? e.t.amount : spend(e);
+    const rows = (flow === "income" ? inc : exp).filter(drillFilter);
+    const allRows = D.E.filter((e) => e.kind === flow && drillFilter(e));
     const totalsAll = {};
     allRows.forEach((e) => {
       const k = keyOf(e, lv);
-      totalsAll[k] = (totalsAll[k] || 0) + spend(e);
+      totalsAll[k] = (totalsAll[k] || 0) + val(e);
     });
     const keys = Object.keys(totalsAll).filter((k) => totalsAll[k] > 5e-3);
     const col = colorsFor(keys, totalsAll);
@@ -791,30 +819,41 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     rows.forEach((e) => {
       const m = e.t.date.slice(0, 7);
       const k = fold(keyOf(e, lv));
-      byMonth[m][k] = (byMonth[m][k] || 0) + spend(e);
+      byMonth[m][k] = (byMonth[m][k] || 0) + val(e);
     });
-    const crumbs = ['<button data-crumb="root">All spending</button>'];
+    const crumbs = ['<button data-crumb="root">All '.concat(flow === "income" ? "income" : "spending").concat(S.reg !== "all" ? " \xB7 " + S.reg : "", "</button>")];
     if (S.drill.group) crumbs.push('<span class="sep">\u203A</span><button data-crumb="group">'.concat(esc(S.drill.group), "</button>"));
     if (S.drill.category) crumbs.push('<span class="sep">\u203A</span><button data-crumb="category">'.concat(esc(S.drill.category), "</button>"));
     if (S.drill.label) crumbs.push('<span class="sep">\u203A</span><b>'.concat(esc(S.drill.label), "</b>"));
     const periodTot = {};
     rows.forEach((e) => {
       const k = keyOf(e, lv);
-      periodTot[k] = (periodTot[k] || 0) + spend(e);
+      periodTot[k] = (periodTot[k] || 0) + val(e);
     });
     const rk = Object.entries(periodTot).filter(([, v]) => Math.abs(v) > 5e-3).sort((a, b) => b[1] - a[1]);
     const maxV = Math.max(1, ...rk.map((r) => r[1]));
     const rank = rk.map(([k, v]) => '<button data-drill="'.concat(esc(k), '" title="Drill into ').concat(esc(k), '"><span class="nm"><i style="background:').concat(colorOf(k), '"></i>').concat(esc(k), '</span><span class="num">').concat(fmt0(v), '</span><span class="bar"><i style="width:').concat(Math.max(0, v / maxV * 100), "%;background:").concat(colorOf(k), '"></i></span><span class="muted" style="font-size:12px">').concat(fmt0(v / nFull), " / month</span></button>")).join("");
     const txRows = rows.filter((e) => !S.selMonth || e.t.date.startsWith(S.selMonth));
-    const dimSeg = S.drill.group || S.drill.category || S.drill.label ? "" : '<div class="seg" role="group" aria-label="Detail level">'.concat([["group", "Groups"], ["category", "Categories"], ["label", "Labels"]].map(([k, n]) => '<button data-dim="'.concat(k, '" aria-pressed="').concat(S.dim === k, '">').concat(n, "</button>")).join(""), "</div>");
+    const dimSeg = S.drill.group || S.drill.category || S.drill.label ? "" : '<div class="seg" role="group" aria-label="Detail level">'.concat([["group", "Groups"], ["category", "Categories"], ["label", "Labels"]].filter(([k]) => !(S.flow === "income" && k === "group")).map(([k, n]) => '<button data-dim="'.concat(k, '" aria-pressed="').concat(level() === k, '">').concat(n, "</button>")).join(""), "</div>");
+    const flowSeg = '<div class="seg" role="group" aria-label="Money in or out">'.concat([["expense", "Spending"], ["income", "Income"]].map(([k, n]) => '<button data-flow="'.concat(k, '" aria-pressed="').concat(S.flow === k, '">').concat(n, "</button>")).join(""), "</div>");
     const regSeg = '<div class="seg" role="group" aria-label="Regularity">'.concat([["all", "All"], ["regular", "Regular"], ["irregular", "Irregular"]].map(([k, n]) => '<button data-reg="'.concat(k, '" aria-pressed="').concat(S.reg === k, '">').concat(n, "</button>")).join(""), "</div>");
-    return "".concat(tiles).concat(partial ? '<div class="muted" style="margin-top:-12px;font-size:12px">* '.concat(ymLong(CUR_YM), " is still in progress and is left out of the monthly averages.</div>") : "", '\n  <div class="grid2">\n    <section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><div class="crumbs">').concat(crumbs.join(""), '</div><div class="row">').concat(dimSeg).concat(regSeg, '</div></div>\n      <div class="chartbox">').concat(stackedBars(months, series, byMonth, colorOf, MORE), '</div>\n      <div class="legend">').concat(series.map((k) => '<button data-drill="'.concat(k === MORE ? "" : esc(k), '" ').concat(k === MORE ? 'title="'.concat(esc(col.other.join(", ")), '"') : "", '><i style="background:').concat(colorOf(k), '"></i>').concat(esc(k), "</button>")).join(""), '</div>\n      <p class="muted" style="margin:0;font-size:12px">Click a bar segment to drill into it; click a month label to list that month\'s transactions.</p>\n    </section>\n    <section class="panel rankpanel" style="display:grid;gap:10px;align-content:start">\n      <h3>').concat(lv === "group" ? "Groups" : lv === "category" ? "Categories" : "Labels", " \xB7 ").concat(S.period === "all" ? "all months" : "last " + S.period + " months", '</h3>\n      <div class="rank">').concat(rank || '<span class="muted">Nothing here.</span>', '</div>\n    </section>\n  </div>\n  <section class="panel" style="display:grid;gap:10px">\n    <div class="row" style="justify-content:space-between">\n      <h3>Transactions').concat(S.drill.group || S.drill.category || S.drill.label ? " in " + esc(S.drill.label || S.drill.category || S.drill.group) : "", '</h3>\n      <div class="row">').concat(S.selMonth ? '<span class="chip">'.concat(ymLong(S.selMonth), '<button data-clearmonth aria-label="Clear month">\xD7</button></span>') : "", '<span class="num muted">').concat(txRows.length, " \xB7 ").concat(fmt(txRows.reduce((s, e) => s + spend(e), 0)), "</span></div>\n    </div>\n    ").concat(txTable(txRows.slice(0, S.showAll ? 400 : 15), true), "\n    ").concat(txRows.length > 15 && !S.showAll ? '<button class="btn" data-showall>Show all '.concat(txRows.length, "</button>") : "", "\n  </section>");
+    const cov = '<div class="muted" style="font-size:12px">Imported: '.concat(D.allMonths.length ? ymLong(D.allMonths[0]) + " \u2013 " + ymLong(D.allMonths[D.allMonths.length - 1]) : "nothing yet", " \xB7 ").concat(S.cfg.accounts.length, " account").concat(S.cfg.accounts.length === 1 ? "" : "s", ' \xB7 <button class="btn link" data-tab="import">see which months</button></div>');
+    const netTable = !S.netOpen ? "" : (() => {
+      const mrow = (m) => {
+        const I = sum(inc.filter((e) => e.t.date.startsWith(m)), (e) => e.t.amount), X = exp.filter((e) => e.t.date.startsWith(m)), Sp = sum(X, spend), Rg = sum(X.filter((e) => isRegular(e.freq)), spend);
+        return '<tr><td><button class="btn link" data-month="'.concat(m, '" data-tile-month="1">').concat(ymLong(m)).concat(m === CUR_YM ? "*" : "", '</button></td><td class="amt num pos">').concat(fmt0(I), '</td><td class="amt num">').concat(fmt0(Sp), '</td><td class="amt num muted">').concat(fmt0(Rg), '</td><td class="amt num muted">').concat(fmt0(Sp - Rg), '</td><td class="amt num"><b class="').concat(I - Sp >= 0 ? "ok" : "bad", '">').concat(I - Sp >= 0 ? "+" : "").concat(fmt0(I - Sp), "</b></td></tr>");
+      };
+      return '<section class="panel" id="netpanel" style="display:grid;gap:8px"><div class="row" style="justify-content:space-between"><h3>Month by month</h3><button class="btn small" data-tile="net">Close</button></div>\n      <div class="tablewrap"><table><thead><tr><th>Month</th><th class="amt">Income</th><th class="amt">Spending</th><th class="amt">Regular</th><th class="amt">Irregular</th><th class="amt">Net</th></tr></thead><tbody>'.concat([...months].reverse().map(mrow).join(""), '</tbody></table></div>\n      <p class="muted" style="margin:0;font-size:12px">Tap a month to see its transactions below the chart.</p></section>');
+    })();
+    return "".concat(cardSignWarnings()).concat(cov).concat(tiles).concat(partial ? '<div class="muted" style="margin-top:-12px;font-size:12px">* '.concat(ymLong(CUR_YM), " is still in progress and is left out of the monthly averages.</div>") : "").concat(netTable, '\n  <div class="grid2">\n    <section class="panel" id="chartpanel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><div class="crumbs">').concat(crumbs.join(""), '</div><div class="row">').concat(flowSeg).concat(dimSeg).concat(regSeg, '</div></div>\n      <div class="chartbox">').concat(stackedBars(months, series, byMonth, colorOf, MORE), '</div>\n      <div class="legend">').concat(series.map((k) => '<button data-drill="'.concat(k === MORE ? "" : esc(k), '" ').concat(k === MORE ? 'title="'.concat(esc(col.other.join(", ")), '"') : "", '><i style="background:').concat(colorOf(k), '"></i>').concat(esc(k), "</button>")).join(""), '</div>\n      <p class="muted" style="margin:0;font-size:12px">Click a bar segment to drill into it; click a month label to list that month\'s transactions.</p>\n    </section>\n    <section class="panel rankpanel" style="display:grid;gap:10px;align-content:start">\n      <h3>').concat(lv === "group" ? "Groups" : lv === "category" ? "Categories" : "Labels", " \xB7 ").concat(S.period === "all" ? "all months" : "last " + S.period + " months", '</h3>\n      <div class="rank">').concat(rank || '<span class="muted">Nothing here.</span>', '</div>\n    </section>\n  </div>\n  <section class="panel" id="txpanel" style="display:grid;gap:10px">\n    <div class="row" style="justify-content:space-between">\n      <h3>Transactions').concat(S.drill.group || S.drill.category || S.drill.label ? " in " + esc(S.drill.label || S.drill.category || S.drill.group) : "", '</h3>\n      <div class="row">').concat(S.selMonth ? '<span class="chip">'.concat(ymLong(S.selMonth), '<button data-clearmonth aria-label="Clear month">\xD7</button></span>') : "", '<span class="num muted">').concat(txRows.length, " \xB7 ").concat(fmt(txRows.reduce((s, e) => s + val(e), 0)), "</span></div>\n    </div>\n    ").concat(txTable(txRows.slice(0, S.showAll ? 400 : 15), true), "\n    ").concat(txRows.length > 15 && !S.showAll ? '<button class="btn" data-showall>Show all '.concat(txRows.length, "</button>") : "", "\n  </section>");
   }
   function tile(k, v, s) {
     return '<div class="tile"><span class="k">'.concat(k, '</span><span class="v">').concat(v, '</span><span class="s">').concat(s, "</span></div>");
   }
   function stackedBars(months, series, byMonth, colorOf, more, baseW = 700, noDrill = false) {
-    const W = Math.max(baseW, months.length * 72), H = 280, padL = 56, padR = 8, padT = 12, padB = 32;
+    const narrow = window.innerWidth < 600;
+    if (narrow) baseW = 400;
+    const W = Math.max(baseW, months.length * (narrow ? 44 : 72)), H = 280, padL = 56, padR = 8, padT = 12, padB = 32;
     const totals = months.map((m) => Object.values(byMonth[m]).reduce((s, v) => s + Math.max(0, v), 0));
     const max = niceMax(Math.max(1, ...totals));
     const y = (v) => padT + (H - padT - padB) * (1 - v / max);
@@ -834,10 +873,10 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
         g += '<rect class="seg-r" '.concat(noDrill ? "" : 'data-drill="'.concat(k === more ? "" : esc(k), '"'), ' data-month="').concat(m, '" x="').concat(cx - bw / 2, '" y="').concat(y1, '" width="').concat(bw, '" height="').concat(h, '" rx="3" fill="').concat(colorOf(k), '" style="cursor:pointer"><title>').concat(esc(k), " \xB7 ").concat(ymLong(m), ": ").concat(fmt(v), "</title></rect>");
       });
       const sel = S.selMonth === m;
-      g += '<text x="'.concat(cx, '" y="').concat(y(totals[i]) - 6, '" text-anchor="middle" font-size="11" font-weight="600" fill="var(--ink-2)">').concat(totals[i] ? fmt0(totals[i]) : "", "</text>");
-      g += '<text data-month="'.concat(m, '" x="').concat(cx, '" y="').concat(H - 10, '" text-anchor="middle" font-size="12" font-weight="').concat(sel ? 800 : 500, '" fill="').concat(sel ? "var(--ink)" : "var(--ink-3)", '" style="cursor:pointer;').concat(sel ? "text-decoration:underline" : "", '">').concat(ymLabel(m)).concat(m === CUR_YM ? "*" : "", "</text>");
+      g += '<text x="'.concat(cx, '" y="').concat(y(totals[i]) - 6, '" text-anchor="middle" font-size="').concat(narrow ? 10 : 11, '" font-weight="600" fill="var(--ink-2)">').concat(totals[i] ? narrow && totals[i] >= 1e3 ? (Math.round(totals[i] / 100) / 10).toString().replace(".", ",") + "k" : fmt0(totals[i]) : "", "</text>");
+      g += '<text data-month="'.concat(m, '" x="').concat(cx, '" y="').concat(H - 10, '" text-anchor="middle" font-size="12" font-weight="').concat(sel ? 800 : 500, '" fill="').concat(sel ? "var(--ink)" : "var(--ink-3)", '" style="cursor:pointer;').concat(sel ? "text-decoration:underline" : "", '">').concat(narrow ? MONTHN[+m.slice(5) - 1] : ymLabel(m)).concat(m === CUR_YM ? "*" : "", "</text>");
     });
-    return '<svg viewBox="0 0 '.concat(W, " ").concat(H, '" width="100%" style="min-width:').concat(Math.min(W, 520), 'px;display:block" role="img" aria-label="Monthly spending, stacked">').concat(g, "</svg>");
+    return '<svg viewBox="0 0 '.concat(W, " ").concat(H, '" width="100%" style="min-width:').concat(narrow ? Math.min(W, 340) : Math.min(W, 520), 'px;display:block" role="img" aria-label="Monthly spending, stacked">').concat(g, "</svg>");
   }
   function niceMax(v) {
     const p = Math.pow(10, Math.floor(Math.log10(v)));
@@ -859,9 +898,9 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
   function txTable(list, compact) {
     if (!list.length) return '<p class="muted">No transactions match.</p>';
     const multiAcct = (S.cfg.accounts || []).length > 1;
-    return '<div class="tablewrap"><table><thead><tr><th>Date</th><th>Payee / message</th><th class="amt">Amount</th><th>Label</th><th>Category</th><th>Repeats</th></tr></thead><tbody>'.concat(list.map((e) => {
+    return '<div class="tablewrap"><table class="txt"><thead><tr><th>Date</th><th>Payee / message</th><th class="amt">Amount</th><th>Label</th><th>Category</th><th>Repeats</th></tr></thead><tbody>'.concat(list.map((e) => {
       const t = e.t;
-      return '<tr><td class="num" style="white-space:nowrap">'.concat(dLabel(t.date), '</td>\n      <td><div class="who" title="').concat(esc(t.payee), '">').concat(esc(t.payee), '</div><div class="sub" title="').concat(esc((e.note ? e.note + " \xB7 " : "") + t.message), '">').concat(multiAcct ? esc(e.a ? e.a.name : "") + " \xB7 " : "").concat(esc(t.type)).concat(t.message ? " \xB7 " + esc(t.message) : "").concat(e.kind === "transfer" && e.note ? " \xB7 <i>not counted</i>" : "", '</div></td>\n      <td class="amt num ').concat(t.amount > 0 ? "pos" : "neg", '">').concat(t.amount > 0 ? "+" : "").concat(fmt(t.amount)).concat(t.src === "manual" ? ' <button class="del" data-deltx="'.concat(esc(t.id), '" title="Delete this entry" aria-label="Delete this entry">\xD7</button>') : "", '</td>\n      <td><input type="text" list="labels-dl" value="').concat(esc(t.label), '" data-label-for="').concat(esc(t.id), '" aria-label="Label" id="lbl-').concat(esc(t.id)).concat(compact ? "-o" : "", '"></td>\n      <td>').concat(e.unsorted ? '<select data-labelcat="'.concat(esc(t.label), '" aria-label="Category"><option value="" selected>\u2014 choose \u2014</option>').concat(catOptions(""), "</select>") : '<select data-labelcat="'.concat(esc(t.label), '" aria-label="Category">').concat(catOptions(e.cat), "</select>"), "</td>\n      <td>").concat(freqSelect(e, 'data-labelfreq="'.concat(esc(t.label), '"')), "</td></tr>");
+      return '<tr><td class="num" style="white-space:nowrap">'.concat(dLabel(t.date), '</td>\n      <td><div class="who" title="').concat(esc(t.payee), '">').concat(esc(t.payee), '</div><div class="sub" title="').concat(esc((e.note ? e.note + " \xB7 " : "") + t.message), '">').concat(multiAcct ? esc(e.a ? e.a.name : "") + " \xB7 " : "").concat(esc(t.type)).concat(t.message ? " \xB7 " + esc(t.message) : "").concat(e.kind === "transfer" && e.note ? " \xB7 <i>not counted</i>" : "", '</div></td>\n      <td class="amt num ').concat(t.amount > 0 ? "pos" : "neg", '">').concat(t.amount > 0 ? "+" : "").concat(fmt(t.amount)).concat(t.src === "manual" ? ' <button class="del" data-deltx="'.concat(esc(t.id), '" title="Delete this entry" aria-label="Delete this entry">\xD7</button>') : "", '</td>\n      <td><button class="pickbtn" data-pick-label="').concat(esc(t.id), '" aria-label="Change label">').concat(esc(t.label), ' <span aria-hidden="true">\u25BE</span></button></td>\n      <td>').concat(e.kind === "transfer" && e.note ? '<span class="muted">'.concat(esc(e.cat), "</span>") : '<button class="pickbtn'.concat(e.unsorted ? " need" : "", '" data-pick-cat="').concat(esc(t.label), '" aria-label="Change category">').concat(e.unsorted ? "Choose\u2026" : esc(e.cat), ' <span aria-hidden="true">\u25BE</span></button>'), "</td>\n      <td>").concat(freqSelect(e, 'data-labelfreq="'.concat(esc(t.label), '"')), "</td></tr>");
     }).join(""), '</tbody></table></div><datalist id="labels-dl">').concat(Object.keys(S.cfg.labels).sort().map((l) => '<option value="'.concat(esc(l), '">')).join(""), "</datalist>");
   }
   function labelStats() {
@@ -933,7 +972,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     });
     const nUns = D.inP.filter((e) => e.unsorted).length;
     const ap = S.pending;
-    return "".concat(ap ? '<div class="applybar"><span>Label <b>'.concat(esc(ap.label), "</b> set. ").concat(ap.ids.length ? "".concat(ap.ids.length, " other transaction").concat(ap.ids.length > 1 ? "s" : "", " from <b>").concat(esc(ap.payee), "</b> ").concat(ap.ids.length > 1 ? "have" : "has", " a different label.") : "Use it for <b>".concat(esc(ap.payee), "</b> in future imports too?"), '</span>\n      <button class="btn primary small" data-apply="all">').concat(ap.ids.length ? "Apply to all from ".concat(esc(ap.payee), " and remember") : "Remember for this payee", '</button>\n      <button class="btn small" data-apply="one">Only this one</button></div>') : "", "\n    ").concat(cashForm(), "\n    ").concat(nUns ? '<div class="notice">'.concat(nUns, " transaction").concat(nUns > 1 ? "s have labels" : " has a label", ' without a category. <button class="btn link" data-txonly="unsorted">Show them</button></div>') : "", '\n    <section class="panel" style="display:grid;gap:12px">\n      <div class="row">\n        <input type="search" id="tx-q" placeholder="Search payee, message, label, amount" value="').concat(esc(f.q), '" style="flex:1;min-width:200px" aria-label="Search">\n        <select id="tx-ym" aria-label="Month"><option value="">All months</option>').concat(D.months.slice().reverse().map((m) => '<option value="'.concat(m, '" ').concat(f.ym === m ? "selected" : "", ">").concat(ymLong(m), "</option>")).join(""), '</select>\n        <select id="tx-cat" aria-label="Category"><option value="">All categories</option>').concat(catOptions(f.cat), '</select>\n        <select id="tx-only" aria-label="Type">').concat([["", "Everything"], ["expense", "Spending"], ["income", "Income"], ["transfer", "Own transfers"], ["unsorted", "Needs category"]].map(([v, n]) => '<option value="'.concat(v, '" ').concat(f.only === v ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select>\n      </div>\n      <div class="muted num">').concat(list.length, " transactions \xB7 net ").concat(fmt(list.reduce((s, e) => s + e.t.amount, 0)), "</div>\n      ").concat(txTable(list.slice(0, 400)), "\n      ").concat(list.length > 400 ? '<p class="muted">Showing 400 of '.concat(list.length, "; narrow the filters to see the rest.</p>") : "", '\n      <p class="muted" style="margin:0;font-size:12px">Category and \u201CRepeats\u201D belong to the label, so changing them updates every transaction with that label.</p>\n    </section>');
+    return "".concat(ap ? '<div class="applybar"><span>Label <b>'.concat(esc(ap.label), "</b> set. ").concat(ap.ids.length ? "".concat(ap.ids.length, " other transaction").concat(ap.ids.length > 1 ? "s" : "", " from <b>").concat(esc(ap.payee), "</b> ").concat(ap.ids.length > 1 ? "have" : "has", " a different label.") : "Use it for <b>".concat(esc(ap.payee), "</b> in future imports too?"), '</span>\n      <button class="btn primary small" data-apply="all">').concat(ap.ids.length ? "Apply to all from ".concat(esc(ap.payee), " and remember") : "Remember for this payee", '</button>\n      <button class="btn small" data-apply="one">Only this one</button></div>') : "", "\n    ").concat(cashForm(), "\n    ").concat(unsortedPanel(), '\n    <section class="panel" style="display:grid;gap:12px">\n      <div class="row">\n        <input type="search" id="tx-q" placeholder="Search payee, message, label, amount" value="').concat(esc(f.q), '" style="flex:1;min-width:200px" aria-label="Search">\n        <select id="tx-ym" aria-label="Month"><option value="">All months</option>').concat(D.months.slice().reverse().map((m) => '<option value="'.concat(m, '" ').concat(f.ym === m ? "selected" : "", ">").concat(ymLong(m), "</option>")).join(""), '</select>\n        <select id="tx-cat" aria-label="Category"><option value="">All categories</option>').concat(catOptions(f.cat), '</select>\n        <select id="tx-only" aria-label="Type">').concat([["", "Everything"], ["expense", "Spending"], ["income", "Income"], ["transfer", "Own transfers"], ["unsorted", "Needs category"]].map(([v, n]) => '<option value="'.concat(v, '" ').concat(f.only === v ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select>\n      </div>\n      <div class="muted num">').concat(list.length, " transactions \xB7 net ").concat(fmt(list.reduce((s, e) => s + e.t.amount, 0)), "</div>\n      ").concat(txTable(list.slice(0, 400)), "\n      ").concat(list.length > 400 ? '<p class="muted">Showing 400 of '.concat(list.length, "; narrow the filters to see the rest.</p>") : "", '\n      <p class="muted" style="margin:0;font-size:12px">Category and \u201CRepeats\u201D belong to the label, so changing them updates every transaction with that label.</p>\n    </section>');
   }
   function cashForm() {
     const cashAccts = S.cfg.accounts.filter((a) => a.kind === "cash");
@@ -969,6 +1008,304 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       var _a;
       return "<tr><td>".concat(esc(r.field === "any" ? "payee or message" : r.field)).concat(r.sign ? " (".concat(r.sign === "in" ? "money in" : "money out", ")") : "", '</td><td class="mono">').concat(esc(r.contains), '</td><td class="amt num">').concat(r.amount != null ? fmt(r.amount) : "", "</td><td>").concat(esc(r.label), ' <span class="muted">\xB7 ').concat(esc(((_a = S.cfg.labels[r.label]) == null ? void 0 : _a.cat) || "no category"), '</span></td><td class="amt num">').concat(D.all.filter((t) => BudgetLogic.ruleMatches(r, t)).length, '</td><td><button class="btn small" data-delrule="').concat(esc(r.id), '">Delete</button></td></tr>');
     }).join(""), "\n      </tbody></table></div>\n    </section>");
+  }
+  const PRESET_CATS = [
+    ["Salary", "Income", "income"],
+    ["Family allowance", "Income", "income"],
+    ["Benefits (Kela)", "Income", "income"],
+    ["Tax refund", "Income", "income"],
+    ["Refunds & returns", "Income", "income"],
+    ["Received from people", "Income", "income"],
+    ["Other income", "Income", "income"],
+    ["Rent", "Housing"],
+    ["Mortgage", "Housing"],
+    ["Housing company fee", "Housing"],
+    ["Electricity", "Housing"],
+    ["Water & waste", "Housing"],
+    ["Heating", "Housing"],
+    ["Home maintenance", "Housing"],
+    ["Groceries", "Food"],
+    ["Eating out", "Food"],
+    ["Alcohol", "Food"],
+    ["Public transport", "Transport"],
+    ["Fuel & parking", "Transport"],
+    ["Car maintenance", "Transport"],
+    ["Car & vehicle tax", "Transport"],
+    ["Insurance", "Insurance"],
+    ["Phone & internet", "Subscriptions"],
+    ["Apps & subscriptions", "Subscriptions"],
+    ["Health & pharmacy", "Health"],
+    ["Daycare & school", "Children"],
+    ["Kids\u2019 hobbies", "Children"],
+    ["Kids (clothes & toys)", "Children"],
+    ["Clothes & shoes", "Shopping"],
+    ["Home & household", "Shopping"],
+    ["Electronics", "Shopping"],
+    ["Online shopping", "Shopping"],
+    ["Travel", "Leisure"],
+    ["Events & tickets", "Leisure"],
+    ["Sports & hobbies", "Leisure"],
+    ["Beauty & hair", "Personal"],
+    ["Gifts", "Personal"],
+    ["Pets", "Pets"],
+    ["Charity", "Charity"],
+    ["Bank fees", "Fees & official"],
+    ["Taxes", "Fees & official"],
+    ["Official fees", "Fees & official"],
+    ["Savings & investments", "Savings", "transfer"],
+    ["MobilePay to people", "Other"],
+    ["Uncategorized", "Other"],
+    ["Own transfers", "Transfers", "transfer"]
+  ].map(([name, group, kind = "expense"]) => ({ name, group, kind }));
+  const PRESET_LABELS = {
+    "Groceries": ["K-Market", "K-Supermarket", "K-Citymarket", "Prisma", "S-market", "Alepa", "Sale", "Lidl", "Tokmanni food", "R-kioski"],
+    "Eating out": ["Wolt", "Foodora", "McDonald's", "Hesburger", "Lounas", "Kahvila"],
+    "Alcohol": ["Alko"],
+    "Electricity": ["Helen", "Oomi", "Fortum", "Vattenfall"],
+    "Water & waste": ["HSY"],
+    "Rent": ["Vuokra"],
+    "Housing company fee": ["Vastike"],
+    "Phone & internet": ["Elisa", "DNA", "Telia"],
+    "Apps & subscriptions": ["Spotify", "Netflix", "Apple", "Google", "Disney+", "HBO Max", "Viaplay", "Storytel"],
+    "Insurance": ["If", "Pohjola", "L\xE4hiTapiola", "Fennia", "Turva"],
+    "Public transport": ["HSL", "VR", "Bolt", "Taxi"],
+    "Fuel & parking": ["Neste", "ST1", "ABC", "Shell", "Teboil", "Parking"],
+    "Car maintenance": ["Katsastus", "Autohuolto"],
+    "Health & pharmacy": ["Apteekki", "Terveystalo", "Mehil\xE4inen", "Pihlajalinna", "Hammasl\xE4\xE4k\xE4ri"],
+    "Clothes & shoes": ["H&M", "Zara", "Lindex", "Zalando", "Stockmann"],
+    "Home & household": ["IKEA", "Tokmanni", "Clas Ohlson", "Jysk", "Motonet"],
+    "Electronics": ["Gigantti", "Verkkokauppa.com", "Power"],
+    "Online shopping": ["Amazon", "Temu", "AliExpress"],
+    "Travel": ["Finnair", "Booking.com", "Airbnb", "Tallink Silja", "Viking Line"],
+    "Events & tickets": ["Finnkino", "Tiketti", "Lippupiste"],
+    "Sports & hobbies": ["Kuntosali", "Uimahalli"],
+    "Beauty & hair": ["Kampaamo"],
+    "Gifts": ["Lahjat"],
+    "Pets": ["Musti ja Mirri"],
+    "Daycare & school": ["P\xE4iv\xE4koti", "Koulu"],
+    "Taxes": ["Verohallinto"],
+    "Salary": ["Palkka"],
+    "Benefits (Kela)": ["Kela"],
+    "Savings & investments": ["S\xE4\xE4st\xF6t"],
+    "Own transfers": ["Own transfer"]
+  };
+  function addPresets(c) {
+    const have = new Set(c.categories.map((x) => x.name.toLowerCase()));
+    PRESET_CATS.forEach((x) => {
+      if (!have.has(x.name.toLowerCase())) c.categories.push(Object.assign({}, x));
+    });
+    const haveL = new Set(Object.keys(c.labels).map((l) => l.toLowerCase()));
+    for (const [cat, ls] of Object.entries(PRESET_LABELS)) ls.forEach((l) => {
+      if (!haveL.has(l.toLowerCase())) c.labels[l] = { cat, freq: null, preset: true };
+    });
+  }
+  function openPicker(p) {
+    S.picker = Object.assign({ q: "", creating: false }, p);
+    renderSheet();
+    setTimeout(() => {
+      var _a;
+      return (_a = $("#pk-q")) == null ? void 0 : _a.focus();
+    }, 30);
+  }
+  function closePicker() {
+    S.picker = null;
+    renderSheet();
+  }
+  function pickerList() {
+    var _a;
+    const pk = S.picker;
+    const q = pk.q.trim().toLowerCase();
+    if (pk.mode === "label") {
+      const t = txById(pk.txId)[0];
+      if (!t) return "";
+      const use = {};
+      D.all.forEach((x) => use[x.label] = (use[x.label] || 0) + 1);
+      const sg = suggestFor("".concat(t.label, " ").concat(t.payee));
+      const samePayee = [...new Set(D.all.filter((x) => x.payee === t.payee && x.id !== t.id).map((x) => x.label))];
+      let names = Object.keys(S.cfg.labels);
+      D.all.forEach((x) => {
+        if (!S.cfg.labels[x.label] && !names.includes(x.label)) names.push(x.label);
+      });
+      let top = [];
+      if (!q) {
+        top = [...new Set([sg && sg.brand, ...samePayee].filter(Boolean))].filter((l) => l !== t.label);
+      }
+      const list = names.filter((l) => {
+        var _a2;
+        return !q || l.toLowerCase().includes(q) || (((_a2 = S.cfg.labels[l]) == null ? void 0 : _a2.cat) || "").toLowerCase().includes(q);
+      }).sort((a, b) => (use[b] || 0) - (use[a] || 0) || a.localeCompare(b)).filter((l) => !top.includes(l)).slice(0, q ? 60 : 40);
+      const exact2 = names.some((l) => l.toLowerCase() === q);
+      const item = (l) => {
+        var _a2;
+        return '<button class="pk-item" data-pk-label="'.concat(esc(l), '"><span>').concat(esc(l)).concat(l === t.label ? ' <span class="pill">current</span>' : "", '</span><span class="muted">').concat(esc(((_a2 = S.cfg.labels[l]) == null ? void 0 : _a2.cat) || "no category"), "</span></button>");
+      };
+      const sgCat = sg ? sg.cat : ((_a = S.cfg.labels[t.label]) == null ? void 0 : _a.cat) || "";
+      return "".concat(q && !exact2 ? '<div class="pk-new"><b>\uFF0B New label \u201C'.concat(esc(pk.q.trim()), '\u201D</b>\n        <div class="row"><select id="pk-newcat" aria-label="Category for the new label">').concat(pk.newCat ? "" : '<option value="">\u2014 choose category \u2014</option>').concat(catOptions(pk.newCat || sgCat), '</select><button class="btn primary" data-pk-create>Create</button></div></div>') : "", "\n      ").concat(top.length ? '<h3 style="margin:6px 0 2px">Suggested</h3>'.concat(top.map(item).join("")) : "", "\n      ").concat(list.length ? '<h3 style="margin:6px 0 2px">'.concat(q ? "Matching labels" : "All labels", "</h3>").concat(list.map(item).join("")) : "");
+    }
+    const groups = {};
+    S.cfg.categories.forEach((c) => {
+      var _a2;
+      if (!q || c.name.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)) (groups[_a2 = c.group] || (groups[_a2] = [])).push(c.name);
+    });
+    const exact = S.cfg.categories.some((c) => c.name.toLowerCase() === q);
+    const allGroups = [...new Set(S.cfg.categories.map((c) => c.group))];
+    return "".concat(q && !exact ? '<div class="pk-new"><b>\uFF0B New category \u201C'.concat(esc(pk.q.trim()), '\u201D</b>\n      <div class="row"><select id="pk-newgroup" aria-label="Group">').concat((() => {
+      var _a2;
+      const amt = D.E.find((x) => x.t.label === pk.label);
+      const cg = ((_a2 = S.cfg.categories.find((c) => c.name === pk.current)) == null ? void 0 : _a2.group) || (amt && amt.t.amount > 0 ? "Income" : "Other");
+      return allGroups.map((g) => "<option ".concat(g === cg ? "selected" : "", ">").concat(esc(g), "</option>")).join("");
+    })(), '<option value="__self">New group \u201C').concat(esc(pk.q.trim()), '\u201D</option></select><button class="btn primary" data-pk-createcat>Create</button></div></div>') : "", "\n    ").concat(Object.entries(groups).map(([g, cs]) => '<h3 style="margin:8px 0 2px">'.concat(esc(g), "</h3>").concat(cs.map((c) => '<button class="pk-item" data-pk-cat="'.concat(esc(c), '"><span>').concat(esc(c), "</span>").concat(c === pk.current ? '<span class="pill">current</span>' : "", "</button>")).join(""))).join(""));
+  }
+  function renderSheet() {
+    let el = document.getElementById("sheet");
+    if (!S.picker) {
+      if (el) el.remove();
+      document.body.style.overflow = "";
+      return;
+    }
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "sheet";
+      document.body.appendChild(el);
+    }
+    document.body.style.overflow = "hidden";
+    const pk = S.picker;
+    let head = "";
+    if (pk.mode === "label") {
+      const t = txById(pk.txId)[0];
+      const n = t ? D.all.filter((x) => x.payee === t.payee && x.id !== t.id && Math.sign(x.amount) === Math.sign(t.amount)).length : 0;
+      head = '<div class="sub" style="max-width:none">'.concat(t ? esc(t.payee) + " \xB7 " + fmt(t.amount) + " \xB7 " + dLabel(t.date) : "", '</div>\n      <label class="pk-chk"><input type="checkbox" id="pk-all" ').concat(pk.all ? "checked" : "", "> use for all ").concat(n ? n + " other " : "", "transactions from this payee, now and in future imports</label>");
+    } else head = '<div class="sub" style="max-width:none">for label \u201C'.concat(esc(pk.label), "\u201D and all its transactions</div>");
+    el.innerHTML = '<div class="sheet-back" data-pk-close></div><div class="sheet" role="dialog" aria-modal="true" aria-label="'.concat(pk.mode === "label" ? "Choose label" : "Choose category", '">\n    <div class="row" style="justify-content:space-between"><h2>').concat(pk.mode === "label" ? "Choose or create a label" : "Choose or create a category", '</h2><button class="btn small" data-pk-close>Close</button></div>\n    ').concat(head, '\n    <input type="search" id="pk-q" placeholder="').concat(pk.mode === "label" ? "Search or type a new label" : "Search or type a new category", '" value="').concat(esc(pk.q), '" autocomplete="off" aria-label="Search">\n    <div id="pk-list" class="pk-list">').concat(pickerList(), "</div></div>");
+  }
+  function pickLabel(label, newCat) {
+    var _a;
+    const pk = S.picker;
+    const [t, ym] = txById(pk.txId);
+    if (!t) return closePicker();
+    if (newCat) S.cfg.labels[label] = Object.assign(S.cfg.labels[label] || { freq: null }, { cat: newCat });
+    const all = (_a = $("#pk-all")) == null ? void 0 : _a.checked;
+    if (all) {
+      const sign = t.amount > 0 ? "in" : "out";
+      S.cfg.rules = S.cfg.rules.filter((r) => !(r.field === "payee" && r.contains.toLowerCase() === t.payee.toLowerCase() && r.amount == null));
+      S.cfg.rules.push({ id: newId("r"), field: "payee", contains: t.payee, label, amount: null, sign });
+      let n = 0;
+      for (const [m, arr] of Object.entries(S.months)) arr.forEach((x) => {
+        if (x.payee === t.payee && Math.sign(x.amount) === Math.sign(t.amount) && (!x.manual || x.id === t.id)) {
+          x.label = label;
+          x.manual = false;
+          n++;
+          markDirty(m);
+        }
+      });
+      toast("\u201C".concat(label, "\u201D set on ").concat(n, " transaction").concat(n === 1 ? "" : "s", " and remembered"));
+    } else {
+      t.label = label;
+      t.manual = true;
+      markDirty(ym);
+      toast("Label set to \u201C".concat(label, "\u201D"));
+    }
+    markDirty("config");
+    S.picker = null;
+    render();
+  }
+  const SUG = [
+    [/\bhelen\b/i, "Helen", "Electricity", "Housing"],
+    [/\boomi\b/i, "Oomi", "Electricity", "Housing"],
+    [/fortum/i, "Fortum", "Electricity", "Housing"],
+    [/vattenfall/i, "Vattenfall", "Electricity", "Housing"],
+    [/\belisa\b/i, "Elisa", "Phone & internet", "Subscriptions"],
+    [/\bdna\b/i, "DNA", "Phone & internet", "Subscriptions"],
+    [/\btelia\b/i, "Telia", "Phone & internet", "Subscriptions"],
+    [/\bhsy\b|ympäristöpalvelut/i, "HSY", "Water & waste", "Housing"],
+    [/if vahinko|\bif p&c\b/i, "If", "Insurance", "Insurance"],
+    [/pohjola vakuutus/i, "Pohjola", "Insurance", "Insurance"],
+    [/lähitapiola|lahitapiola/i, "L\xE4hiTapiola", "Insurance", "Insurance"],
+    [/fennia/i, "Fennia", "Insurance", "Insurance"],
+    [/\bturva\b/i, "Turva", "Insurance", "Insurance"],
+    [/verohallinto|skatteförvaltningen/i, "Verohallinto", "Taxes", "Fees & official"],
+    [/gigantti|verkkokauppa|power\.fi|\bpower\b|\bapple store\b/i, null, "Electronics", "Shopping"],
+    [/k-?citymarket/i, "K-Citymarket", "Groceries", "Food"],
+    [/k-?supermarket/i, "K-Supermarket", "Groceries", "Food"],
+    [/k-?market/i, "K-Market", "Groceries", "Food"],
+    [/prisma/i, "Prisma", "Groceries", "Food"],
+    [/s-?market/i, "S-market", "Groceries", "Food"],
+    [/\balepa\b/i, "Alepa", "Groceries", "Food"],
+    [/\bsale\b/i, "Sale", "Groceries", "Food"],
+    [/\blidl\b/i, "Lidl", "Groceries", "Food"],
+    [/\bsiwa\b/i, "Siwa", "Groceries", "Food"],
+    [/valintatalo/i, "Valintatalo", "Groceries", "Food"],
+    [/m-?market|minimani/i, null, "Groceries", "Food"],
+    [/\brimi\b|\bmaxima\b|\baldi\b|\bcoop\b|\bica\b|food ?market|ruokakauppa|lähikauppa|kauppahalli|r-?kioski|halal|asian market|aasialainen/i, null, "Groceries", "Food"],
+    [/\balko\b/i, "Alko", "Alcohol", "Food"],
+    [/\bwolt\b/i, "Wolt", "Eating out", "Food"],
+    [/foodora/i, "Foodora", "Eating out", "Food"],
+    [/mcdonald/i, "McDonald's", "Eating out", "Food"],
+    [/hesburger/i, "Hesburger", "Eating out", "Food"],
+    [/burger king|subway|kotipizza|pizza|ravintola|restaurant|\bcafe\b|café|kahvila|coffee|espresso house|starbucks|sushi|kebab|bistro|grill|\bpub\b|\bbar\b|taco|noodle|unicafe|amica|sodexo|compass group|fazer|leipomo|bakery|jäätelö/i, null, "Eating out", "Food"],
+    [/\bneste\b|\bst1\b|\bshell\b|teboil|\babc\b|circle ?k|\besso\b/i, null, "Fuel & parking", "Transport"],
+    [/parking|pysäköinti|easypark|aimo ?park|europark|parkman|moovy|katsastus|autopesu|car ?wash/i, null, "Fuel & parking", "Transport"],
+    [/\bhsl\b|hsl-|\bvr\b|vr-yhtymä|matkahuolto|onnibus|\bbolt\b|\buber\b|taxi|taksi|yango|tier |voi technology|lime\*/i, null, "Public transport", "Transport"],
+    [/apteekki|pharmacy|terveystalo|mehiläinen|pihlajalinna|hammas|dental|oral hammas|specsavers|instru|lääkäri|terveys/i, null, "Health & pharmacy", "Health"],
+    [/h&m|\bhm\b|\bzara\b|lindex|kappahl|cubus|dressmann|vero moda|jack ?& ?jones|\bnike\b|adidas|intersport|\bxxl\b|stadium|zalando|boozt|footway|deichmann|halonen|weekday|primark|reserved|\bnext\b/i, null, "Clothes & shoes", "Shopping"],
+    [/\bikea\b|\bjysk\b|clas ohlson|tokmanni|motonet|bauhaus|k-?rauta|byggmax|puuilo|\bnormal\b|flying tiger|søstrene|sostrene|rusta|hong kong|biltema|stockmann|sokos|kodin ?terra|hööks|lagerhaus|hemtex/i, null, "Home & household", "Shopping"],
+    [/amazon|aliexpress|\btemu\b|shein|ebay|etsy|\bcdon\b|wish\.com/i, null, "Online shopping", "Shopping"],
+    [/spotify|netflix|apple\.com|itunes|google|youtube|disney|\bhbo\b|max\.com|viaplay|elisa viihde|ruutu|storytel|bookbeat|nextory|microsoft|adobe|openai|chatgpt|anthropic|claude\.ai|dropbox|patreon|duolingo|\bflo\b/i, null, "Apps & subscriptions", "Subscriptions"],
+    [/finnair|norwegian|ryanair|airbnb|booking\.com|hotel|hotelli|scandic|tallink|silja|viking ?line|eckerö|lufthansa|\bsas\b|airbaltic|agoda|expedia|lentokenttä|airport|duty ?free/i, null, "Travel", "Leisure"],
+    [/tiketti|lippupiste|ticketmaster|fienta|finnkino|\bkino\b|museum|museo|teatteri|theatre|linnanmäki|serena|hoplop|superpark|bowling|keilailu/i, null, "Events & tickets", "Leisure"],
+    [/\bgym\b|kuntosali|elixia|fressi|liikku|uimahalli|swimming|sports? club|urheilu|seura ry|\bball\b|tanssi|dance/i, null, "Sports & hobbies", "Leisure"],
+    [/lelu|toys|jollyroom|babyshop|lekmer|br-?lelut|kids|lasten/i, null, "Kids (clothes & toys)", "Children"],
+    [/\bmusti\b|zoo|eläin|\bvet\b|eläinlääk/i, null, "Pets", "Other"],
+    [/kampaamo|\bhair\b|parturi|kosmetiik|lyko|kicks|sephora|\bnail|beauty|kauneus/i, null, "Beauty & hair", "Personal"]
+  ];
+  function suggestFor(text) {
+    for (const [re, brand, cat, group] of SUG) if (re.test(text)) return { brand, cat, group };
+    return null;
+  }
+  function ensureCat(name, group) {
+    if (!S.cfg.categories.some((c) => c.name === name)) S.cfg.categories.push({ name, group, kind: "expense" });
+  }
+  function applySuggestions(onlyLabels) {
+    var _a;
+    let n = 0;
+    const groups = {};
+    for (const t of Object.values(S.months).flat()) {
+      if (S.cfg.labels[t.label] || t.amount > 0) continue;
+      if (onlyLabels && !onlyLabels.has(t.label)) continue;
+      (groups[_a = t.label] || (groups[_a] = [])).push(t);
+    }
+    for (const [label, ts] of Object.entries(groups)) {
+      const sg = suggestFor("".concat(label, " ").concat(ts[0].payee));
+      if (!sg) continue;
+      ensureCat(sg.cat, sg.group);
+      const target = sg.brand && !ts.some((t) => t.manual) ? sg.brand : label;
+      if (!S.cfg.labels[target]) S.cfg.labels[target] = { cat: sg.cat, freq: null };
+      if (target !== label) ts.forEach((t) => {
+        t.label = target;
+        markDirty(t.date.slice(0, 7));
+      });
+      n += ts.length;
+    }
+    if (n) markDirty("config");
+    return n;
+  }
+  function unsortedPanel() {
+    const by = {};
+    D.E.filter((e) => e.unsorted).forEach((e) => {
+      var _a;
+      const s = by[_a = e.t.label] || (by[_a] = { label: e.t.label, n: 0, total: 0, payee: e.t.payee });
+      s.n++;
+      s.total += e.t.amount;
+    });
+    const rows = Object.values(by).sort((a, b) => b.n - a.n || a.total - b.total);
+    if (!rows.length) return "";
+    const nTx = rows.reduce((s, r) => s + r.n, 0);
+    const withSug = rows.filter((r) => r.total < 0 && suggestFor("".concat(r.label, " ").concat(r.payee)));
+    const shown = S.unsAll ? rows : rows.slice(0, 25);
+    return '<section class="panel" style="display:grid;gap:10px;border-color:var(--warn)">\n    <div class="row" style="justify-content:space-between"><h2>'.concat(nTx, " transaction").concat(nTx > 1 ? "s" : "", " need a category</h2>\n      ").concat(withSug.length ? '<button class="btn primary" data-acceptsug>Sort '.concat(withSug.reduce((s, r) => s + r.n, 0), " automatically (").concat(withSug.length, " shops)</button>") : "", '</div>\n    <p class="muted" style="margin:0">They\'re grouped by shop or payee. Pick a category once and every transaction with that label gets it, now and in future imports.').concat(withSug.length ? " The automatic option uses known Finnish shops and services (K-Market, Prisma, Wolt, HSL, Apteekki\u2026); you can change any of them later." : "", '</p>\n    <div class="tablewrap"><table><thead><tr><th>Label</th><th class="amt">Count</th><th class="amt">Total</th><th>Category</th></tr></thead><tbody>\n    ').concat(shown.map((r) => {
+      const sg = r.total < 0 ? suggestFor("".concat(r.label, " ").concat(r.payee)) : null;
+      return '<tr><td><div class="who">'.concat(esc(r.label), "</div>").concat(sg ? '<div class="sub">suggested: '.concat(esc(sg.cat), "</div>") : "", '</td><td class="amt num">').concat(r.n, '</td><td class="amt num">').concat(fmt(r.total), '</td>\n      <td><button class="pickbtn need" data-pick-cat="').concat(esc(r.label), '">Choose\u2026 <span aria-hidden="true">\u25BE</span></button></td></tr>');
+    }).join(""), "\n    </tbody></table></div>\n    ").concat(rows.length > shown.length ? '<button class="btn" data-unsall>Show all '.concat(rows.length, " labels</button>") : "", "\n  </section>");
   }
   const isoD = (d) => "".concat(d.getFullYear(), "-").concat(String(d.getMonth() + 1).padStart(2, "0"), "-").concat(String(d.getDate()).padStart(2, "0"));
   const TODAY_ISO = isoD(TODAY);
@@ -1107,6 +1444,11 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       c.statements.push({ id: "s0", acct: c.accounts[0].id, from: ds[0].slice(0, 8) + "01", to: ds[ds.length - 1], file: "Restored data", n: all.length });
       markDirty("config");
     }
+    if (!c.v3) {
+      addPresets(c);
+      c.v3 = true;
+      markDirty("config");
+    }
     if (!c.v2) {
       const op = c.categories.find((x) => x.name === "OP card (unitemized)");
       if (op && op.kind === "expense") {
@@ -1148,8 +1490,44 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     };
     return '<div class="tablewrap"><table class="cov"><thead><tr><th>Account</th>'.concat(months.map((m) => "<th>".concat(ymLabel(m), "</th>")).join(""), "</tr></thead><tbody>\n    ").concat(accts.map((a) => "<tr><td><b>".concat(esc(a.name), '</b><div class="sub">').concat(esc(a.person), " \xB7 ").concat(KIND_NAME[a.kind] || a.kind, "</div></td>").concat(months.map((m) => "<td>".concat(cell(a, m), "</td>")).join(""), "</tr>")).join(""), '\n  </tbody></table></div>\n  <p class="muted" style="margin:0;font-size:12px">\u2713 whole month imported \xB7 numbers = only those days \xB7 \u2014 missing. For cash, the number is how many entries.</p>');
   }
+  function cardSignWarnings() {
+    return S.cfg.accounts.filter((a) => a.kind === "card").map((a) => {
+      const ts = D.all.filter((t) => t.acct === a.id);
+      if (ts.length < 3) return "";
+      const pos = ts.filter((t) => t.amount > 0).length;
+      if (pos / ts.length < 0.6) return "";
+      return '<div class="notice"><b>'.concat(esc(a.name), ":</b> ").concat(pos, " of ").concat(ts.length, ' card transactions are plus amounts, so purchases are being counted as income. <button class="btn primary small" data-flipacct="').concat(esc(a.id), '">Fix: flip + / \u2212 for this card</button></div>');
+    }).join("");
+  }
+  function dupNotice() {
+    const seen = {};
+    const pairs = {};
+    for (const t of D.all) {
+      const k = "".concat(t.date, "|").concat(t.amount, "|").concat(t.payee);
+      (seen[k] || (seen[k] = [])).push(t.acct);
+    }
+    for (const accts of Object.values(seen)) {
+      const u = [...new Set(accts)];
+      if (u.length > 1) {
+        const k = u.sort().join("+");
+        pairs[k] = (pairs[k] || 0) + 1;
+      }
+    }
+    return Object.entries(pairs).filter(([, n]) => n >= 5).map(([k, n]) => '<div class="notice">'.concat(n, " transactions appear in both <b>").concat(k.split("+").map((id) => {
+      var _a;
+      return esc(((_a = D.acctMap[id]) == null ? void 0 : _a.name) || id);
+    }).join("</b> and <b>"), "</b>. If the same statement was imported into two accounts, delete the extra account below.</div>")).join("");
+  }
+  function statementsList() {
+    const st = [...S.cfg.statements].sort((a, b) => b.from.localeCompare(a.from));
+    if (!st.length) return "";
+    return '<details id="d-stmts" '.concat(S.open["d-stmts"] ? "open" : "", "><summary>Imported files (").concat(st.length, ')</summary><div style="display:grid;gap:6px;margin-top:8px">\n    ').concat(st.map((s) => {
+      var _a;
+      return '<div class="catrow"><div style="min-width:0"><b class="num">'.concat(dLabel(s.from), " \u2013 ").concat(dLabel(s.to), '</b><div class="sub" style="max-width:none">').concat(esc(((_a = D.acctMap[s.acct]) == null ? void 0 : _a.name) || "?"), " \xB7 ").concat(esc(s.file)).concat(s.n != null ? " \xB7 " + s.n + " rows" : "", "</div></div>\n      <div>").concat(s.id !== "s0" ? '<button class="btn small" data-delstmt="'.concat(esc(s.id), '">').concat(S.confirm === s.id ? "Tap again to remove" : "Remove", "</button>") : "", "</div></div>");
+    }).join(""), '\n  </div><p class="muted" style="font-size:12px">Remove takes out that file\'s transactions, so you can import it again.</p></details>');
+  }
   function accountsEditor() {
-    return "<details><summary>Accounts and people (".concat(S.cfg.accounts.length, ')</summary>\n    <p class="muted">Money moved between accounts listed here is not counted as spending or income. Add your family members\' accounts by importing their statements.</p>\n    <div class="tablewrap"><table><thead><tr><th>Name</th><th>Person</th><th>Type</th><th>Account / card number</th><th class="amt">Transactions</th></tr></thead><tbody>\n    ').concat(S.cfg.accounts.map((a) => '<tr><td><input type="text" value="'.concat(esc(a.name), '" data-acctname="').concat(esc(a.id), '" id="an-').concat(esc(a.id), '" aria-label="Account name"></td>\n      <td><input type="text" value="').concat(esc(a.person), '" data-acctperson="').concat(esc(a.id), '" id="ap-').concat(esc(a.id), '" aria-label="Person"></td>\n      <td><select data-acctkind="').concat(esc(a.id), '" aria-label="Type">').concat(Object.entries(KIND_NAME).map(([k, n]) => '<option value="'.concat(k, '" ').concat(k === a.kind ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select></td>\n      <td><input type="text" value="').concat(esc(a.iban), '" data-acctiban="').concat(esc(a.id), '" id="ai-').concat(esc(a.id), '" aria-label="Account number" placeholder="FI.."></td>\n      <td class="amt num">').concat(D.all.filter((t) => t.acct === a.id).length, "</td></tr>")).join(""), "\n    </tbody></table></div></details>");
+    return '<details id="d-accts" '.concat(S.open["d-accts"] ? "open" : "", "><summary>Accounts and people (").concat(S.cfg.accounts.length, ')</summary>\n    <p class="muted">Money moved between accounts listed here is not counted as spending or income. Add your family members\' accounts by importing their statements.</p>\n    <div style="display:grid;gap:8px">\n    ').concat(S.cfg.accounts.map((a) => '<div class="catrow" style="grid-template-columns:1fr">\n      <div class="formgrid">\n        <label>Name<input type="text" value="'.concat(esc(a.name), '" data-acctname="').concat(esc(a.id), '" id="an-').concat(esc(a.id), '"></label>\n        <label>Whose<input type="text" value="').concat(esc(a.person), '" data-acctperson="').concat(esc(a.id), '" id="ap-').concat(esc(a.id), '"></label>\n        <label>Type<select data-acctkind="').concat(esc(a.id), '">').concat(Object.entries(KIND_NAME).map(([k, n]) => '<option value="'.concat(k, '" ').concat(k === a.kind ? "selected" : "", ">").concat(n, "</option>")).join(""), '</select></label>\n        <label>Account / card number<input type="text" value="').concat(esc(a.iban), '" data-acctiban="').concat(esc(a.id), '" id="ai-').concat(esc(a.id), '" placeholder="FI.."></label>\n      </div>\n      <div class="row"><span class="muted num">').concat(D.all.filter((t) => t.acct === a.id).length, " transactions</span>").concat(a.kind === "card" ? ' <button class="btn small" data-flipacct="'.concat(esc(a.id), '">Flip + / \u2212</button>') : "", ' <button class="btn small" data-delacct="').concat(esc(a.id), '">').concat(S.confirm === a.id ? "Tap again: delete account and its transactions" : "Delete account", "</button></div>\n    </div>")).join(""), "\n    </div></details>");
   }
   function guessAccount(row) {
     const ib = normIban(row.account);
@@ -1182,13 +1560,15 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     const newTotal = plans.reduce((s, x) => s + (x ? x.fresh.length : 0), 0);
     const acctOpts = (sel) => S.cfg.accounts.filter((a) => a.kind !== "cash").map((a) => '<option value="'.concat(esc(a.id), '" ').concat(a.id === sel ? "selected" : "", ">").concat(esc(a.name), " (").concat(esc(a.person), ")</option>")).join("") + '<option value="new" '.concat(sel === "new" ? "selected" : "", ">\uFF0B New account\u2026</option>");
     const cards = imp.map((r, i) => {
+      var _a;
       if (r.error) return '<div class="impcard"><b>'.concat(esc(r.name), '</b><span class="bad">').concat(esc(r.error), "</span></div>");
       const pl = plans[i];
-      const sign = r.flip ? -1 : 1;
-      return '<div class="impcard">\n      <div class="row" style="justify-content:space-between"><b style="word-break:break-all">'.concat(esc(r.name), '</b><span class="muted num">').concat(r.from ? dLabel(r.from) + " \u2013 " + dLabel(r.to) : "", "</span></div>\n      <div>").concat(r.check).concat(r.account ? ' <span class="muted">\xB7 '.concat(esc(r.account), "</span>") : "").concat(r.holder ? ' <span class="muted">\xB7 '.concat(esc(r.holder), "</span>") : "", '</div>\n      <div class="formgrid">\n        <label>Account<select data-imp-acct="').concat(i, '">').concat(acctOpts(r.acct), "</select></label>\n        ").concat(r.acct === "new" ? '<label>Account name<input type="text" data-imp-name="'.concat(i, '" id="imn-').concat(i, '" value="').concat(esc(r.newName), '"></label>\n          <label>Whose<input type="text" data-imp-person="').concat(i, '" id="imp-').concat(i, '" value="').concat(esc(r.newPerson), '" list="people-dl"></label>\n          <label>Type<select data-imp-kind="').concat(i, '"><option value="bank" ').concat(r.newKind === "bank" ? "selected" : "", '>Bank account</option><option value="card" ').concat(r.newKind === "card" ? "selected" : "", ">Credit card</option></select></label>") : "", "\n        ").concat(r.format !== "op" ? '<label class="chk"><input type="checkbox" data-imp-flip="'.concat(i, '" ').concat(r.flip ? "checked" : "", "> purchases are shown as plus amounts</label>") : "", '\n      </div>\n      <div class="row muted num"><span><b style="color:var(--ink)">').concat(pl.fresh.length, "</b> new</span><span>").concat(pl.dups, ' already saved</span></div>\n      <details><summary>Preview</summary><div class="tablewrap"><table><tbody>').concat(r.txns.slice(0, 8).map((t) => '<tr><td class="num">'.concat(dLabel(t.date), "</td><td>").concat(esc(t.payee), '</td><td class="amt num">').concat(fmt(t.amount * sign), "</td></tr>")).join(""), "</tbody></table></div>").concat(r.txns.length > 8 ? '<p class="muted">\u2026and '.concat(r.txns.length - 8, " more</p>") : "", "</details>\n    </div>");
+      const sign = rowFlip(r) ? -1 : 1;
+      const isCardRow = r.acct === "new" ? r.newKind === "card" : ((_a = S.cfg.accounts.find((a) => a.id === r.acct)) == null ? void 0 : _a.kind) === "card";
+      return '<div class="impcard">\n      <div class="row" style="justify-content:space-between"><b style="word-break:break-all">'.concat(esc(r.name), '</b><span class="muted num">').concat(r.from ? dLabel(r.from) + " \u2013 " + dLabel(r.to) : "", "</span></div>\n      <div>").concat(r.check).concat(r.account ? ' <span class="muted">\xB7 '.concat(esc(r.account), "</span>") : "").concat(r.holder ? ' <span class="muted">\xB7 '.concat(esc(r.holder), "</span>") : "", '</div>\n      <div class="formgrid">\n        <label>Account<select data-imp-acct="').concat(i, '">').concat(acctOpts(r.acct), "</select></label>\n        ").concat(r.acct === "new" ? '<label>Account name<input type="text" data-imp-name="'.concat(i, '" id="imn-').concat(i, '" value="').concat(esc(r.newName), '"></label>\n          <label>Whose<input type="text" data-imp-person="').concat(i, '" id="imp-').concat(i, '" value="').concat(esc(r.newPerson), '" list="people-dl"></label>\n          <label>Type<select data-imp-kind="').concat(i, '"><option value="bank" ').concat(r.newKind === "bank" ? "selected" : "", '>Bank account</option><option value="card" ').concat(r.newKind === "card" ? "selected" : "", ">Credit card</option></select></label>") : "", "\n        ").concat(r.format !== "op" || isCardRow ? '<label class="chk"><input type="checkbox" data-imp-flip="'.concat(i, '" ').concat(rowFlip(r) ? "checked" : "", "> purchases are shown as plus amounts in this file</label>") : "", '\n      </div>\n      <div class="row muted num"><span><b style="color:var(--ink)">').concat(pl.fresh.length, "</b> new</span><span>").concat(pl.dups, ' already saved</span></div>\n      <details><summary>Preview</summary><div class="tablewrap"><table><tbody>').concat(r.txns.slice(0, 8).map((t) => '<tr><td class="num">'.concat(dLabel(t.date), "</td><td>").concat(esc(t.payee), '</td><td class="amt num">').concat(fmt(t.amount * sign), "</td></tr>")).join(""), "</tbody></table></div>").concat(r.txns.length > 8 ? '<p class="muted">\u2026and '.concat(r.txns.length - 8, " more</p>") : "", "</details>\n    </div>");
     }).join("");
     const people = [...new Set(S.cfg.accounts.map((a) => a.person).filter(Boolean))];
-    return '<section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Months imported</h2></div>\n      '.concat(coverageGrid() || '<p class="muted">Nothing imported yet.</p>', "\n      ").concat(accountsEditor(), '\n    </section>\n    <section class="panel" style="display:grid;gap:14px">\n      <h2>Add statements</h2>\n      <label class="drop" id="drop" for="file"><b>Choose bank or credit card statements</b><span class="muted">PDF from OP, or CSV exports \xB7 yours or a family member\'s \xB7 read on this device only</span>\n        <span class="btn primary">Choose files</span>\n        <input type="file" id="file" accept=".pdf,.csv,.txt,application/pdf,text/csv" multiple hidden></label>\n      ').concat(cards, '<datalist id="people-dl">').concat(people.map((x) => '<option value="'.concat(esc(x), '">')).join(""), "</datalist>\n      ").concat(imp.length ? '<div class="row"><button class="btn primary" data-doimport '.concat(newTotal ? "" : "disabled", ">Add ").concat(newTotal, " new transaction").concat(newTotal === 1 ? "" : "s", '</button><button class="btn" data-clearimport>Clear list</button></div>') : "", '\n      <p class="muted" style="margin:0;font-size:12px">Credit card statements: once a month\'s card purchases are imported, the repayments to the card from your bank account stop counting as spending for that month, so nothing is counted twice.</p>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h3>Backup</h3>\n      <p class="muted" style="margin:0">Your data is saved ').concat(S.store === "db" ? "with this page and only you can read it" : S.store === "local" ? "in this browser on this device only" : "nowhere (preview)", ". ").concat(D.all.length, " transactions over ").concat(D.allMonths.length, ' months.</p>\n      <div class="row"><button class="btn" data-export>Download backup (JSON)</button>\n      <label class="btn" for="restore">Restore from backup\u2026</label><input type="file" id="restore" accept=".json,application/json" hidden></div>\n    </section>');
+    return '<section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Months imported</h2></div>\n      '.concat(cardSignWarnings(), "\n      ").concat(coverageGrid() || '<p class="muted">Nothing imported yet.</p>', "\n      ").concat(dupNotice(), "\n      ").concat(accountsEditor(), "\n      ").concat(statementsList(), '\n    </section>\n    <section class="panel" style="display:grid;gap:14px">\n      <h2>Add statements</h2>\n      <label class="drop" id="drop" for="file"><b>Choose bank or credit card statements</b><span class="muted">PDF from OP, or CSV exports \xB7 yours or a family member\'s \xB7 read on this device only</span>\n        <span class="btn primary">Choose files</span>\n        <input type="file" id="file" accept=".pdf,.csv,.txt,application/pdf,text/csv" multiple hidden></label>\n      ').concat(cards, '<datalist id="people-dl">').concat(people.map((x) => '<option value="'.concat(esc(x), '">')).join(""), "</datalist>\n      ").concat(imp.length ? '<div class="row"><button class="btn primary" data-doimport '.concat(newTotal ? "" : "disabled", ">Add ").concat(newTotal, " new transaction").concat(newTotal === 1 ? "" : "s", '</button><button class="btn" data-clearimport>Clear list</button></div>') : "", '\n      <p class="muted" style="margin:0;font-size:12px">Credit card statements: once a month\'s card purchases are imported, the repayments to the card from your bank account stop counting as spending for that month, so nothing is counted twice.</p>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h3>Backup</h3>\n      <p class="muted" style="margin:0;font-size:12px">App version 7.2 \xB7 built 11.11.2026 17:32 (Helsinki time)</p>\n      <p class="muted" style="margin:0">Your data is saved ').concat(S.store === "db" ? "with this page and only you can read it" : S.store === "local" ? "in this browser on this device only" : "nowhere (preview)", ". ").concat(D.all.length, " transactions over ").concat(D.allMonths.length, ' months.</p>\n      <div class="row"><button class="btn" data-export>Download backup (JSON)</button>\n      <label class="btn" for="restore">Restore from backup\u2026</label><input type="file" id="restore" accept=".json,application/json" hidden></div>\n    </section>');
   }
   function bindDrop() {
     const dz = $("#drop");
@@ -1231,9 +1611,9 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
           const ok = dep.length === s.depositCount && wd.length === s.withdrawalCount && sum(dep) === s.deposits && sum(wd) === s.withdrawals;
           row.check = ok ? '<span class="ok">\u2713 matches statement totals</span>' : '<span class="bad">\u2717 totals differ</span> <span class="muted num">read '.concat(dep.length, " in / ").concat(wd.length, " out, statement says ").concat(s.depositCount, " / ").concat(s.withdrawalCount, "</span>");
         } else row.check = '<span class="muted">'.concat(res.txns.length, " rows read \xB7 check the preview</span>");
-        row.flip = res.format !== "op" && dep.length > wd.length;
+        row.flipGuess = dep.length > wd.length;
         row.acct = guessAccount(row);
-        const isCard = res.format === "generic" || /\*{2,}/.test(res.account || "");
+        const isCard = res.format === "generic" || /\*{2,}/.test(res.account || "") || /credit|card|luotto|kortti|visa|master/i.test(f.name);
         row.newKind = isCard ? "card" : "bank";
         row.newPerson = titleCase((res.holder || "").split(" ").slice(-1)[0]) || (((_a = S.cfg.accounts[0]) == null ? void 0 : _a.person) || "Me");
         row.newName = isCard ? "Credit card ".concat(row.newPerson) : "".concat(row.newPerson, " \u2013 ").concat(res.account ? res.account.slice(-5) : "account");
@@ -1243,6 +1623,13 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       S.imports.push(row);
     }
     render();
+  }
+  function rowFlip(r) {
+    if (r.flip != null) return r.flip;
+    const a = S.cfg.accounts.find((x) => x.id === r.acct);
+    const isCard = r.acct === "new" ? r.newKind === "card" : (a == null ? void 0 : a.kind) === "card";
+    if (isCard) return a && a.flip != null ? a.flip : !!r.flipGuess;
+    return r.format !== "op" && !!r.flipGuess;
   }
   function doImport() {
     var _a;
@@ -1259,8 +1646,11 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       const a = S.cfg.accounts.find((x) => x.id === r.acct);
       if (a && !a.iban && r.account) a.iban = r.account;
       const { fresh } = rowPlan(r, queued);
-      const sign = r.flip ? -1 : 1;
-      const txs = fresh.map((t) => Object.assign({}, t, { raw: t.id, id: "".concat(r.acct, ":").concat(t.id), acct: r.acct, amount: Math.round(t.amount * sign * 100) / 100 }));
+      const flip = rowFlip(r);
+      const sign = flip ? -1 : 1;
+      if (a && a.kind === "card") a.flip = flip;
+      const stmtId = newId("s");
+      const txs = fresh.map((t) => Object.assign({}, t, { raw: t.id, id: "".concat(r.acct, ":").concat(t.id), acct: r.acct, stmt: stmtId, amount: Math.round(t.amount * sign * 100) / 100 }));
       BudgetLogic.relabel(txs, S.cfg);
       for (const t of txs) {
         const ym = t.date.slice(0, 7);
@@ -1268,19 +1658,22 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
         markDirty(ym);
         added.push(t);
       }
-      if (r.from) S.cfg.statements.push({ id: newId("s"), acct: r.acct, from: r.from, to: r.to, file: r.name, n: txs.length });
+      if (r.from) S.cfg.statements.push({ id: stmtId, acct: r.acct, from: r.from, to: r.to, file: r.name, n: txs.length });
       n += txs.length;
     }
     markDirty("config");
     Object.values(S.months).forEach((a) => a.sort((x, y) => x.date.localeCompare(y.date)));
     S.imports = [];
     derive();
-    const uns = added.filter((t) => !S.cfg.labels[t.label]).length;
-    toast("Added ".concat(n, " transactions").concat(uns ? " \xB7 ".concat(uns, " need a category") : ""));
+    const sorted = applySuggestions(new Set(added.map((t) => t.label)));
+    derive();
+    const addedIds = new Set(added.map((t) => t.id));
+    const uns = D.E.filter((e) => e.unsorted && addedIds.has(e.t.id)).length;
+    toast("Added ".concat(n, " transactions").concat(sorted ? " \xB7 ".concat(sorted, " sorted automatically") : "").concat(uns ? " \xB7 ".concat(uns, " need a category") : ""));
     if (uns) {
       S.view = "tx";
-      S.tx = { q: "", ym: "", cat: "", only: "unsorted" };
-    }
+      S.tx = { q: "", ym: "", cat: "", only: "" };
+    } else S.view = "import";
     render();
   }
   function txById(id) {
@@ -1403,10 +1796,61 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     toastT = setTimeout(() => el.hidden = true, 3200);
   }
   document.addEventListener("click", async (e) => {
-    var _a;
-    const el = e.target.closest("[data-showall],[data-tab],[data-dim],[data-reg],[data-drill],[data-crumb],[data-month],[data-clearmonth],[data-apply],[data-txonly],[data-gotolabel],[data-gotogroup],[data-delrule],[data-doimport],[data-clearimport],[data-export],[data-deltx],[data-rerun],[data-person],[data-delplan],[data-planall]");
+    var _a, _b, _c, _d, _e, _f, _g;
+    const el = e.target.closest("[data-pick-label],[data-pick-cat],[data-pk-close],[data-pk-label],[data-pk-create],[data-pk-cat],[data-pk-createcat],[data-tile],[data-flow],[data-showall],[data-tab],[data-dim],[data-reg],[data-drill],[data-crumb],[data-month],[data-clearmonth],[data-apply],[data-txonly],[data-gotolabel],[data-gotogroup],[data-delrule],[data-doimport],[data-clearimport],[data-export],[data-deltx],[data-rerun],[data-person],[data-delplan],[data-planall],[data-flipacct],[data-acceptsug],[data-unsall],[data-delstmt],[data-delacct]");
     if (!el) return;
     const d = el.dataset;
+    if (d.pickLabel) {
+      const t = txById(d.pickLabel)[0];
+      const amountRules = t && S.cfg.rules.some((r) => r.amount != null && BudgetLogic.ruleMatches(Object.assign({}, r, { amount: null }), t));
+      const all = !!t && !S.cfg.labels[t.label] && !amountRules;
+      return openPicker({ mode: "label", txId: d.pickLabel, all });
+    }
+    if (d.pickCat !== void 0 && el.matches("[data-pick-cat]")) return openPicker({ mode: "cat", label: d.pickCat, current: (_a = S.cfg.labels[d.pickCat]) == null ? void 0 : _a.cat });
+    if ("pkClose" in d) return closePicker();
+    if (d.pkLabel !== void 0) return pickLabel(d.pkLabel, null);
+    if ("pkCreate" in d) {
+      const cat = (_b = $("#pk-newcat")) == null ? void 0 : _b.value;
+      if (!cat) return toast("Choose a category for the new label");
+      return pickLabel(S.picker.q.trim(), cat);
+    }
+    if (d.pkCat !== void 0) {
+      const l = S.picker.label;
+      S.picker = null;
+      return setLabelCat(l, d.pkCat);
+    }
+    if ("pkCreatecat" in d) {
+      const name = S.picker.q.trim();
+      let g = $("#pk-newgroup").value;
+      if (g === "__self") g = name;
+      S.cfg.categories.push({ name, group: g, kind: S.cfg.labels[S.picker.label] && ((_c = D.E.find((x) => x.t.label === S.picker.label)) == null ? void 0 : _c.t.amount) > 0 ? "income" : "expense" });
+      const l = S.picker.label;
+      S.picker = null;
+      toast("Category \u201C".concat(name, "\u201D created"));
+      return setLabelCat(l, name);
+    }
+    if (d.tile) {
+      const t = d.tile;
+      S.drill = { group: null, category: null, label: null };
+      S.selMonth = null;
+      S.showAll = false;
+      if (t === "net") {
+        S.netOpen = !S.netOpen;
+        render();
+        if (S.netOpen) (_d = document.getElementById("netpanel")) == null ? void 0 : _d.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      S.flow = t === "income" ? "income" : "expense";
+      S.reg = t === "reg" ? "regular" : t === "irr" ? "irregular" : "all";
+      render();
+      (_e = document.getElementById("chartpanel")) == null ? void 0 : _e.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (d.flow) {
+      S.flow = d.flow;
+      S.drill = { group: null, category: null, label: null };
+      return render();
+    }
     if ("showall" in d) {
       S.showAll = true;
       return render();
@@ -1443,6 +1887,12 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       return render();
     }
     if (d.month) {
+      if (d.tileMonth) {
+        S.selMonth = d.month;
+        render();
+        (_f = document.getElementById("txpanel")) == null ? void 0 : _f.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
       S.selMonth = S.selMonth === d.month ? null : d.month;
       return render();
     }
@@ -1490,6 +1940,61 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       S.person = d.person;
       return render();
     }
+    if ("acceptsug" in d) {
+      const n = applySuggestions();
+      toast("".concat(n, " transactions sorted"));
+      return render();
+    }
+    if ("unsall" in d) {
+      S.unsAll = true;
+      return render();
+    }
+    if (d.delstmt || d.delacct) {
+      const key = d.delstmt || d.delacct;
+      if (S.confirm !== key) {
+        S.confirm = key;
+        return render();
+      }
+      S.confirm = null;
+      let n = 0;
+      const st = d.delstmt ? S.cfg.statements.find((s) => s.id === key) : null;
+      const hasStmt = d.delstmt && Object.values(S.months).some((arr) => arr.some((t) => t.stmt === key));
+      for (const [ym, arr] of Object.entries(S.months)) {
+        const keep = arr.filter((t) => d.delstmt ? !(t.stmt === key || !hasStmt && st && t.acct === st.acct && t.date >= st.from && t.date <= st.to) : t.acct !== key);
+        if (keep.length !== arr.length) {
+          n += arr.length - keep.length;
+          S.months[ym] = keep;
+          markDirty(ym);
+        }
+      }
+      if (d.delstmt) S.cfg.statements = S.cfg.statements.filter((s) => s.id !== key);
+      else {
+        S.cfg.statements = S.cfg.statements.filter((s) => s.acct !== key);
+        S.cfg.accounts = S.cfg.accounts.filter((a) => a.id !== key);
+      }
+      markDirty("config");
+      toast("Removed ".concat(n, " transactions"));
+      return render();
+    }
+    if (d.flipacct) {
+      const a = S.cfg.accounts.find((x) => x.id === d.flipacct);
+      let n = 0;
+      for (const [ym, arr] of Object.entries(S.months)) {
+        let ch = false;
+        arr.forEach((t) => {
+          if (t.acct === d.flipacct) {
+            t.amount = -t.amount;
+            n++;
+            ch = true;
+          }
+        });
+        if (ch) markDirty(ym);
+      }
+      if (a) a.flip = !a.flip;
+      markDirty("config");
+      toast("Flipped ".concat(n, " transactions on ").concat(a ? a.name : "the card"));
+      return render();
+    }
     if ("planall" in d) {
       S.planAll = true;
       return render();
@@ -1512,7 +2017,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       return render();
     }
     if ("rerun" in d) {
-      const all = !!((_a = $("#rerun-manual")) == null ? void 0 : _a.checked);
+      const all = !!((_g = $("#rerun-manual")) == null ? void 0 : _g.checked);
       let n = 0;
       for (const [ym, a] of Object.entries(S.months)) {
         const before = a.map((t) => t.label);
@@ -1555,6 +2060,14 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       S.selMonth = null;
       return render();
     }
+    if (el.id === "pk-newcat" && S.picker) {
+      S.picker.newCat = el.value;
+      return;
+    }
+    if (el.id === "pk-all" && S.picker) {
+      S.picker.all = el.checked;
+      return;
+    }
     if (el.id === "predict-on") {
       S.cfg.predictOn = el.checked;
       markDirty("config");
@@ -1577,12 +2090,12 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       S.imports[+d.impPerson].newPerson = el.value;
       return;
     }
-    if (d.impKind !== void 0) {
-      S.imports[+d.impKind].newKind = el.value;
-      return;
-    }
     if (d.impFlip !== void 0) {
       S.imports[+d.impFlip].flip = el.checked;
+      return render();
+    }
+    if (d.impKind !== void 0) {
+      S.imports[+d.impKind].newKind = el.value;
       return render();
     }
     const acctField = [["acctname", "name"], ["acctperson", "person"], ["acctkind", "kind"], ["acctiban", "iban"]].find(([k]) => d[k] !== void 0);
@@ -1653,8 +2166,17 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       return render();
     }
   });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && S.picker) closePicker();
+  });
   let qT;
   document.addEventListener("input", (e) => {
+    if (e.target.id === "pk-q" && S.picker) {
+      S.picker.q = e.target.value;
+      const L = $("#pk-list");
+      if (L) L.innerHTML = pickerList();
+      return;
+    }
     if (e.target.id === "tx-q") {
       clearTimeout(qT);
       const v = e.target.value;
@@ -1672,6 +2194,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
   document.addEventListener("toggle", (e) => {
     if (e.target.id === "cashbox") S.cashOpen = e.target.open;
     if (e.target.id === "planbox") S.planOpen = e.target.open;
+    if (e.target.id && e.target.id.startsWith("d-")) S.open[e.target.id] = e.target.open;
   }, true);
   document.addEventListener("submit", (e) => {
     var _a, _b;
