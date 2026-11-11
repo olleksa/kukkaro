@@ -189,7 +189,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
 
 <header class="top">
   <div class="wrap topbar">
-    <div class="brand"><b>Kukkaro</b><span id="acct" title="Version 7.3, built 11.11.2026 17:56">household money · v7.3 · 261111.1756</span></div>
+    <div class="brand"><b>Kukkaro</b><span id="acct" title="Version 7.4, built 11.11.2026 18:28">household money · v7.4 · 261111.1828</span></div>
     <div class="period">
       <label class="muted" for="period">Period</label>
       <select id="period">
@@ -1538,19 +1538,61 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
     const raw = new Set(row.txns.map((t) => t.id));
     const hit = D.all.find((t) => raw.has(t.raw || t.id));
     if (hit) return hit.acct;
+    const by = {};
+    D.all.forEach((t) => {
+      var _a;
+      if (t.src !== "manual") (by[_a = fz(t)] || (by[_a] = [])).push(t);
+    });
+    const votes = {};
+    for (const t of row.txns) for (const s of [1, -1]) {
+      const tt = Object.assign({}, t, { amount: t.amount * s });
+      (by[fz(tt)] || []).forEach((x) => {
+        if (sameMoney(x, tt)) votes[x.acct] = (votes[x.acct] || 0) + 1;
+      });
+    }
+    const best = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+    if (best && best[1] >= 3) return best[0];
     return "new";
   }
   const dupKey = (t) => "".concat(t.raw || t.id, "|").concat(t.date, "|").concat(Math.round(t.amount * 100));
+  const STOPW = /* @__PURE__ */ new Set(["oyj", "oy", "ab", "abp", "ltd", "plc", "bank", "transfer", "payment", "card", "service", "direct", "internal", "trnsf", "deposit", "message", "tilisiirto", "korttiosto", "maksu", "pano", "otto", "viite", "the", "and", "for", "helsinki", "vantaa", "espoo", "finland", "filial", "sepa", "instant", "credit"]);
+  function words(t) {
+    return new Set("".concat(t.payee || "", " ").concat(t.message || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9а-яё]+/).filter((w) => w.length >= 3 && !STOPW.has(w) && !/^\d+$/.test(w)));
+  }
+  const fz = (t) => "".concat(t.date, "|").concat(Math.round(t.amount * 100));
+  function sameMoney(a, b) {
+    if (fz(a) !== fz(b)) return false;
+    const wa = words(a), wb = words(b);
+    if (!wa.size || !wb.size) return true;
+    for (const w of wa) if (wb.has(w)) return true;
+    for (const w of wa) for (const v of wb) if (w.length >= 4 && v.length >= 4 && (w.startsWith(v) || v.startsWith(w))) return true;
+    return false;
+  }
   function rowPlan(row, queued) {
     const acct = row.acct;
     const sign = rowFlip(row) ? -1 : 1;
     const have = new Set(D.all.filter((t) => t.acct === acct).map((t) => t.raw || t.id));
     const haveAny = new Set(D.all.filter((t) => t.src !== "manual").map(dupKey));
+    const pool = {};
+    D.all.filter((t) => t.acct === acct && t.src !== "manual").forEach((t) => {
+      var _a;
+      return (pool[_a = fz(t)] || (pool[_a] = [])).push(t);
+    });
     const fresh = [], seen = queued || /* @__PURE__ */ new Set();
     let dups = 0;
     for (const t of row.txns) {
-      const k = "".concat(t.id, "|").concat(t.date, "|").concat(Math.round(t.amount * sign * 100));
-      if (have.has(t.id) || haveAny.has(k) || seen.has(k)) dups++;
+      const tt = Object.assign({}, t, { amount: Math.round(t.amount * sign * 100) / 100 });
+      const k = "".concat(t.id, "|").concat(t.date, "|").concat(Math.round(tt.amount * 100));
+      let dup = have.has(t.id) || haveAny.has(k) || seen.has(k);
+      if (!dup) {
+        const c = pool[fz(tt)];
+        const i = c ? c.findIndex((x) => sameMoney(x, tt)) : -1;
+        if (i >= 0) {
+          c.splice(i, 1);
+          dup = true;
+        }
+      }
+      if (dup) dups++;
       else {
         fresh.push(t);
         seen.add(k);
@@ -1613,6 +1655,64 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       mergeAccount(drop, keep);
       merged++;
     }
+    for (let guard = 0; guard < 10; guard++) {
+      const accts = S.cfg.accounts.filter((a) => a.kind !== "cash");
+      const by = {};
+      Object.values(S.months).flat().forEach((t) => {
+        var _a;
+        if (t.src !== "manual") (by[_a = fz(t)] || (by[_a] = [])).push(t);
+      });
+      const cnt = {}, size = {};
+      Object.values(S.months).flat().forEach((t) => size[t.acct] = (size[t.acct] || 0) + 1);
+      for (const g of Object.values(by)) for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) {
+        if (g[i].acct === g[j].acct || !sameMoney(g[i], g[j])) continue;
+        const [x, y] = [g[i].acct, g[j].acct].sort((m, n) => order(m) - order(n));
+        const k = x + ">" + y;
+        cnt[k] = (cnt[k] || 0) + 1;
+      }
+      const hit = Object.entries(cnt).find(([k, n]) => {
+        const [x, y] = k.split(">");
+        return n >= 3 && n >= 0.3 * Math.min(size[x] || 1, size[y] || 1);
+      });
+      if (!hit) break;
+      const [keep, drop] = hit[0].split(">");
+      const ka = accts.find((a) => a.id === keep), da = accts.find((a) => a.id === drop);
+      if (!ka || !da || ka.kind !== da.kind || normIban(ka.iban) && normIban(da.iban) && normIban(ka.iban) !== normIban(da.iban)) break;
+      mergeAccount(drop, keep);
+      merged++;
+    }
+    {
+      const src = (t) => t.stmt || (t.raw ? "r" : "legacy");
+      const groups = {};
+      Object.values(S.months).flat().forEach((t) => {
+        var _a;
+        if (t.src !== "manual") (groups[_a = "".concat(t.acct, "|").concat(fz(t))] || (groups[_a] = [])).push(t);
+      });
+      for (const g of Object.values(groups)) {
+        if (g.length < 2) continue;
+        const bySrc = {};
+        g.forEach((t) => {
+          var _a;
+          return (bySrc[_a = src(t)] || (bySrc[_a] = [])).push(t);
+        });
+        const srcs = Object.values(bySrc);
+        if (srcs.length < 2) continue;
+        srcs.sort((a, b) => b.length - a.length || b.some((t) => t.manual) - a.some((t) => t.manual));
+        const kept = [...srcs[0]];
+        for (const s of srcs.slice(1)) for (const t of s) {
+          const i = kept.findIndex((k) => !k._used && sameMoney(k, t));
+          if (i >= 0) {
+            kept[i]._used = true;
+            if (t.manual && !kept[i].manual) {
+              kept[i].label = t.label;
+              kept[i].manual = true;
+            }
+            t._drop = true;
+          } else kept.push(t);
+        }
+        kept.forEach((k) => delete k._used);
+      }
+    }
     const seen = /* @__PURE__ */ new Map();
     for (const [ym, arr] of Object.entries(S.months)) for (const t of arr) {
       if (t.src === "manual") continue;
@@ -1657,7 +1757,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
       return '<div class="impcard">\n      <div class="row" style="justify-content:space-between"><b style="word-break:break-all">'.concat(esc(r.name), '</b><span class="muted num">').concat(r.from ? dLabel(r.from) + " \u2013 " + dLabel(r.to) : "", "</span></div>\n      <div>").concat(r.check).concat(r.account ? ' <span class="muted">\xB7 '.concat(esc(r.account), "</span>") : "").concat(r.holder ? ' <span class="muted">\xB7 '.concat(esc(r.holder), "</span>") : "", '</div>\n      <div class="formgrid">\n        <label>Account<select data-imp-acct="').concat(i, '">').concat(acctOpts(r.acct), "</select></label>\n        ").concat(r.acct === "new" ? '<label>Account name<input type="text" data-imp-name="'.concat(i, '" id="imn-').concat(i, '" value="').concat(esc(r.newName), '"></label>\n          <label>Whose<input type="text" data-imp-person="').concat(i, '" id="imp-').concat(i, '" value="').concat(esc(r.newPerson), '" list="people-dl"></label>\n          <label>Type<select data-imp-kind="').concat(i, '"><option value="bank" ').concat(r.newKind === "bank" ? "selected" : "", '>Bank account</option><option value="card" ').concat(r.newKind === "card" ? "selected" : "", ">Credit card</option></select></label>") : "", "\n        ").concat(r.format !== "op" || isCardRow ? '<label class="chk"><input type="checkbox" data-imp-flip="'.concat(i, '" ').concat(rowFlip(r) ? "checked" : "", "> purchases are shown as plus amounts in this file</label>") : "", '\n      </div>\n      <div class="row muted num"><span><b style="color:var(--ink)">').concat(pl.fresh.length, "</b> new</span><span>").concat(pl.dups, ' already saved</span></div>\n      <details><summary>Preview</summary><div class="tablewrap"><table><tbody>').concat(r.txns.slice(0, 8).map((t) => '<tr><td class="num">'.concat(dLabel(t.date), "</td><td>").concat(esc(t.payee), '</td><td class="amt num">').concat(fmt(t.amount * sign), "</td></tr>")).join(""), "</tbody></table></div>").concat(r.txns.length > 8 ? '<p class="muted">\u2026and '.concat(r.txns.length - 8, " more</p>") : "", "</details>\n    </div>");
     }).join("");
     const people = [...new Set(S.cfg.accounts.map((a) => a.person).filter(Boolean))];
-    return '<section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Months imported</h2></div>\n      '.concat(cardSignWarnings(), "\n      ").concat(coverageGrid() || '<p class="muted">Nothing imported yet.</p>', "\n      ").concat(dupNotice(), '\n      <div class="row"><button class="btn small" data-cleandups>Find and remove duplicates</button></div>\n      ').concat(accountsEditor(), "\n      ").concat(statementsList(), '\n    </section>\n    <section class="panel" style="display:grid;gap:14px">\n      <h2>Add statements</h2>\n      <label class="drop" id="drop" for="file"><b>Choose bank or credit card statements</b><span class="muted">PDF from OP, or CSV exports \xB7 yours or a family member\'s \xB7 read on this device only</span>\n        <span class="btn primary">Choose files</span>\n        <input type="file" id="file" accept=".pdf,.csv,.txt,application/pdf,text/csv" multiple hidden></label>\n      ').concat(cards, '<datalist id="people-dl">').concat(people.map((x) => '<option value="'.concat(esc(x), '">')).join(""), "</datalist>\n      ").concat(imp.length ? '<div class="row"><button class="btn primary" data-doimport '.concat(newTotal ? "" : "disabled", ">Add ").concat(newTotal, " new transaction").concat(newTotal === 1 ? "" : "s", '</button><button class="btn" data-clearimport>Clear list</button></div>') : "", '\n      <p class="muted" style="margin:0;font-size:12px">Credit card statements: once a month\'s card purchases are imported, the repayments to the card from your bank account stop counting as spending for that month, so nothing is counted twice.</p>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h3>Backup</h3>\n      <p class="muted" style="margin:0;font-size:12px">App version 7.3 \xB7 built 11.11.2026 17:56 (Helsinki time)</p>\n      <p class="muted" style="margin:0">Your data is saved ').concat(S.store === "db" ? "with this page and only you can read it" : S.store === "local" ? "in this browser on this device only" : "nowhere (preview)", ". ").concat(D.all.length, " transactions over ").concat(D.allMonths.length, ' months.</p>\n      <div class="row"><button class="btn" data-export>Download backup (JSON)</button>\n      <label class="btn" for="restore">Restore from backup\u2026</label><input type="file" id="restore" accept=".json,application/json" hidden></div>\n    </section>');
+    return '<section class="panel" style="display:grid;gap:12px">\n      <div class="row" style="justify-content:space-between"><h2>Months imported</h2></div>\n      '.concat(cardSignWarnings(), "\n      ").concat(coverageGrid() || '<p class="muted">Nothing imported yet.</p>', "\n      ").concat(dupNotice(), '\n      <div class="row"><button class="btn small" data-cleandups>Find and remove duplicates</button></div>\n      ').concat(accountsEditor(), "\n      ").concat(statementsList(), '\n    </section>\n    <section class="panel" style="display:grid;gap:14px">\n      <h2>Add statements</h2>\n      <label class="drop" id="drop" for="file"><b>Choose bank or credit card statements</b><span class="muted">PDF from OP, or CSV exports \xB7 yours or a family member\'s \xB7 read on this device only</span>\n        <span class="btn primary">Choose files</span>\n        <input type="file" id="file" accept=".pdf,.csv,.txt,application/pdf,text/csv" multiple hidden></label>\n      ').concat(cards, '<datalist id="people-dl">').concat(people.map((x) => '<option value="'.concat(esc(x), '">')).join(""), "</datalist>\n      ").concat(imp.length ? '<div class="row"><button class="btn primary" data-doimport '.concat(newTotal ? "" : "disabled", ">Add ").concat(newTotal, " new transaction").concat(newTotal === 1 ? "" : "s", '</button><button class="btn" data-clearimport>Clear list</button></div>') : "", '\n      <p class="muted" style="margin:0;font-size:12px">Credit card statements: once a month\'s card purchases are imported, the repayments to the card from your bank account stop counting as spending for that month, so nothing is counted twice.</p>\n    </section>\n    <section class="panel" style="display:grid;gap:10px">\n      <h3>Backup</h3>\n      <p class="muted" style="margin:0;font-size:12px">App version 7.4 \xB7 built 11.11.2026 18:28 (Helsinki time)</p>\n      <p class="muted" style="margin:0">Your data is saved ').concat(S.store === "db" ? "with this page and only you can read it" : S.store === "local" ? "in this browser on this device only" : "nowhere (preview)", ". ").concat(D.all.length, " transactions over ").concat(D.allMonths.length, ' months.</p>\n      <div class="row"><button class="btn" data-export>Download backup (JSON)</button>\n      <label class="btn" for="restore">Restore from backup\u2026</label><input type="file" id="restore" accept=".json,application/json" hidden></div>\n    </section>');
   }
   function bindDrop() {
     const dz = $("#drop");
@@ -1705,7 +1805,7 @@ input[type=date],input[type=number]{background:var(--surface);border:1px solid v
         if (row.acct === "new" && row.account) {
           const twin = S.imports.find((x) => x.account && normIban(x.account) === normIban(row.account) && x.acct !== "new");
           if (twin) row.acct = twin.acct;
-          else if (S.cfg.accounts.length === 1 && !S.cfg.accounts[0].iban && S.cfg.accounts[0].kind === "bank" && res.format === "op") row.acct = S.cfg.accounts[0].id;
+          else if (S.cfg.accounts.length === 1 && !S.cfg.accounts[0].iban && S.cfg.accounts[0].kind === "bank" && res.format !== "generic") row.acct = S.cfg.accounts[0].id;
         }
         const isCard = res.format === "generic" || /\*{2,}/.test(res.account || "") || /credit|card|luotto|kortti|visa|master/i.test(f.name);
         row.newKind = isCard ? "card" : "bank";
